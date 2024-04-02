@@ -101,32 +101,21 @@ pub const RParen = struct {
     }
 };
 
-const TokenError = struct {
-    msg: []const u8,
-
-    pub fn init(allocator: std.mem.Allocator, msg: []const u8) !TokenError {
-        return TokenError{ .msg = try std.fmt.allocPrint(allocator, "Tokenization error: {s}", .{msg}) };
-    }
-};
-
-const TokenizeResult = union(enum(u8)) {
-    result: std.ArrayList(Token),
-    err: TokenError,
-};
-
-pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !TokenizeResult {
+pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(Token) {
     var tokens = std.ArrayList(Token).init(allocator);
 
     var chars = try std.ArrayList(u8).initCapacity(allocator, input.len);
     chars.appendSliceAssumeCapacity(input);
 
     if (chars.items.len == 0) {
-        return .{ .result = tokens };
+        return tokens;
     }
     while (chars.items.len > 0) {
         var ch = chars.orderedRemove(0);
         switch (ch) {
-            '(' => try tokens.append(Token{ .LParen = .{} }),
+            '(' => {
+                try tokens.append(Token{ .LParen = .{} });
+            },
             ')' => try tokens.append(Token{ .RParen = .{} }),
             '"' => {
                 var word = std.ArrayList(u8).init(allocator);
@@ -137,8 +126,7 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !TokenizeResult
                 if (chars.items.len > 0 and chars.items[0] == '"') {
                     _ = chars.orderedRemove(0);
                 } else {
-                    const err = try TokenError.init(allocator, try std.fmt.allocPrint(allocator, "Unterminated string: {s}", .{word.items}));
-                    return .{ .err = err };
+                    return error.UnterminatedString;
                 }
                 try tokens.append(Token{ .String = .{ .value = word.items } });
             },
@@ -169,7 +157,7 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !TokenizeResult
             },
         }
     }
-    return .{ .result = tokens };
+    return tokens;
 }
 
 const isIntegerResult = struct {
@@ -240,7 +228,7 @@ test "test_add" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const tokenized = try tokenize(allocator, "(+ 1 2)");
+    const tokens = try tokenize(allocator, "(+ 1 2)");
 
     const expected = [_]Token{
         Token{ .LParen = .{} },
@@ -250,11 +238,7 @@ test "test_add" {
         Token{ .RParen = .{} },
     };
 
-    const tokens = tokenized.result;
-
-    inline for (0..expected.len) |i| {
-        try std.testing.expectEqualDeep(expected[i], tokens.items[i]);
-    }
+    try std.testing.expectEqualDeep(expected[0..], tokens.items);
 }
 
 test "test_area_of_a_circle" {
@@ -270,7 +254,7 @@ test "test_area_of_a_circle" {
         \\)
     ;
 
-    const tokenized = try tokenize(allocator, program);
+    const tokens = try tokenize(allocator, program);
 
     const expected = [_]Token{
         Token{ .LParen = .{} },
@@ -296,11 +280,7 @@ test "test_area_of_a_circle" {
         Token{ .RParen = .{} },
     };
 
-    const tokens = tokenized.result;
-
-    inline for (0..expected.len) |i| {
-        try std.testing.expectEqualDeep(expected[i], tokens.items[i]);
-    }
+    try std.testing.expectEqualDeep(expected[0..], tokens.items);
 }
 
 test "test_unterminated_string" {
@@ -312,6 +292,5 @@ test "test_unterminated_string" {
         \\("bar)
     ;
 
-    const tokenized = try tokenize(allocator, program);
-    try std.testing.expectEqualStrings("Tokenization error: Unterminated string: bar)", tokenized.err.msg);
+    try std.testing.expectError(error.UnterminatedString, tokenize(allocator, program));
 }

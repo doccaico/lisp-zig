@@ -112,7 +112,7 @@ pub const Lambda = struct {
 };
 
 pub const List = struct {
-    list: *std.ArrayList(Object),
+    list: std.ArrayList(Object),
 
     pub fn string(self: Lambda, writer: anytype) !void {
         _ = self;
