@@ -97,18 +97,23 @@ pub const RParen = struct {
 };
 
 // Error
-const TokenError = error{
-    UnterminatedString,
+// const TokenError = error{
+//     UnterminatedString,
+// };
+
+const TokenizeResult = union(enum(u8)) {
+    result: std.ArrayList(Token),
+    errmsg: []const u8,
 };
 
-pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) anyerror!std.ArrayList(Token) {
+pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !TokenizeResult {
     var tokens = std.ArrayList(Token).init(allocator);
 
     var chars = try std.ArrayList(u8).initCapacity(allocator, input.len);
     chars.appendSliceAssumeCapacity(input);
 
     if (chars.items.len == 0) {
-        return tokens;
+        return .{ .result = tokens };
     }
     while (chars.items.len > 0) {
         var ch = chars.orderedRemove(0);
@@ -124,7 +129,7 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) anyerror!std.Ar
                 if (chars.items.len > 0 and chars.items[0] == '"') {
                     _ = chars.orderedRemove(0);
                 } else {
-                    return TokenError.UnterminatedString;
+                    return .{ .errmsg = try std.fmt.allocPrint(allocator, "Unterminated string: {s}", .{word.items}) };
                 }
                 try tokens.append(Token{ .String = .{ .value = word.items } });
             },
@@ -141,41 +146,46 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) anyerror!std.Ar
 
                 var token: Token = undefined;
                 if (word.items.len != 0) {
-                    if (isInteger(word.items)) {
-                        token = Token{ .Integer = .{ .value = try std.fmt.parseInt(i64, word.items, 10) } };
-                    } else if (isFloat(word.items)) {
-                        token = Token{ .Float = .{ .value = try std.fmt.parseFloat(f64, word.items) } };
-                    } else {
-                        if (isKeyword(word.items)) {
-                            token = Token{ .Keyword = .{ .value = word.items } };
-                        } else if (isIf(word.items)) {
-                            token = Token{ .If = .{} };
-                        } else if (isBinaryOp(word.items)) {
-                            token = Token{ .BinaryOp = .{ .value = word.items } };
-                        } else {
-                            token = Token{ .Symbol = .{ .value = word.items } };
-                        }
-                    }
+                    token = blk: {
+                        const integer_result = isInteger(word.items);
+                        if (integer_result.ok) break :blk Token{ .Integer = .{ .value = integer_result.value } };
+                        const float_result = isFloat(word.items);
+                        if (float_result.ok) break :blk Token{ .Float = .{ .value = float_result.value } };
+                        if (isKeyword(word.items)) break :blk Token{ .Keyword = .{ .value = word.items } };
+                        if (isIf(word.items)) break :blk Token{ .If = .{} };
+                        if (isBinaryOp(word.items)) break :blk Token{ .BinaryOp = .{ .value = word.items } };
+                        break :blk Token{ .Symbol = .{ .value = word.items } };
+                    };
                 }
                 try tokens.append(token);
             },
         }
     }
-    return tokens;
+    return .{ .result = tokens };
 }
 
-fn isInteger(word: []const u8) bool {
-    _ = std.fmt.parseInt(i64, word, 10) catch {
-        return false;
+const isIntegerResult = struct {
+    value: i64 = undefined,
+    ok: bool,
+};
+
+fn isInteger(word: []const u8) isIntegerResult {
+    const value = std.fmt.parseInt(i64, word, 10) catch {
+        return .{ .ok = false };
     };
-    return true;
+    return .{ .value = value, .ok = true };
 }
 
-fn isFloat(word: []const u8) bool {
-    _ = std.fmt.parseFloat(f64, word) catch {
-        return false;
+const isFloatResult = struct {
+    value: f64 = undefined,
+    ok: bool,
+};
+
+fn isFloat(word: []const u8) isFloatResult {
+    const value = std.fmt.parseFloat(f64, word) catch {
+        return .{ .ok = false };
     };
-    return true;
+    return .{ .value = value, .ok = true };
 }
 
 fn isKeyword(word: []const u8) bool {
@@ -222,7 +232,7 @@ test "test_add" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const tokens = try tokenize(allocator, "(+ 1 2)");
+    const tokenized = try tokenize(allocator, "(+ 1 2)");
 
     const expected = [_]Token{
         Token{ .LParen = .{} },
@@ -232,8 +242,9 @@ test "test_add" {
         Token{ .RParen = .{} },
     };
 
-    comptime var i: usize = 0;
-    inline while (i < expected.len) : (i += 1) {
+    const tokens = tokenized.result;
+
+    inline for (0..expected.len) |i| {
         try std.testing.expectEqualDeep(expected[i], tokens.items[i]);
     }
 }
