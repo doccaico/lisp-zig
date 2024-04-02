@@ -12,6 +12,11 @@ const std = @import("std");
 //     RParen,
 // };
 
+// Error
+// const TokenError = error{
+//     UnterminatedString,
+// };
+
 pub const Token = union(enum(u8)) {
     Integer: Integer,
     Float: Float,
@@ -96,11 +101,6 @@ pub const RParen = struct {
     }
 };
 
-// Error
-// const TokenError = error{
-//     UnterminatedString,
-// };
-
 const TokenizeResult = union(enum(u8)) {
     result: std.ArrayList(Token),
     errmsg: []const u8,
@@ -144,9 +144,8 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !TokenizeResult
                     ch = chars.orderedRemove(0);
                 }
 
-                var token: Token = undefined;
                 if (word.items.len != 0) {
-                    token = blk: {
+                    const token = blk: {
                         const integer_result = isInteger(word.items);
                         if (integer_result.ok) break :blk Token{ .Integer = .{ .value = integer_result.value } };
                         const float_result = isFloat(word.items);
@@ -156,8 +155,8 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !TokenizeResult
                         if (isBinaryOp(word.items)) break :blk Token{ .BinaryOp = .{ .value = word.items } };
                         break :blk Token{ .Symbol = .{ .value = word.items } };
                     };
+                    try tokens.append(token);
                 }
-                try tokens.append(token);
             },
         }
     }
@@ -247,4 +246,63 @@ test "test_add" {
     inline for (0..expected.len) |i| {
         try std.testing.expectEqualDeep(expected[i], tokens.items[i]);
     }
+}
+
+test "test_area_of_a_circle" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const program =
+        \\(
+        \\    (define r 10)
+        \\    (define pi 314)
+        \\    (* pi (* r r))
+        \\)
+    ;
+
+    const tokenized = try tokenize(allocator, program);
+
+    const expected = [_]Token{
+        Token{ .LParen = .{} },
+        Token{ .LParen = .{} },
+        Token{ .Keyword = .{ .value = "define" } },
+        Token{ .Symbol = .{ .value = "r" } },
+        Token{ .Integer = .{ .value = 10 } },
+        Token{ .RParen = .{} },
+        Token{ .LParen = .{} },
+        Token{ .Keyword = .{ .value = "define" } },
+        Token{ .Symbol = .{ .value = "pi" } },
+        Token{ .Integer = .{ .value = 314 } },
+        Token{ .RParen = .{} },
+        Token{ .LParen = .{} },
+        Token{ .BinaryOp = .{ .value = "*" } },
+        Token{ .Symbol = .{ .value = "pi" } },
+        Token{ .LParen = .{} },
+        Token{ .BinaryOp = .{ .value = "*" } },
+        Token{ .Symbol = .{ .value = "r" } },
+        Token{ .Symbol = .{ .value = "r" } },
+        Token{ .RParen = .{} },
+        Token{ .RParen = .{} },
+        Token{ .RParen = .{} },
+    };
+
+    const tokens = tokenized.result;
+
+    inline for (0..expected.len) |i| {
+        try std.testing.expectEqualDeep(expected[i], tokens.items[i]);
+    }
+}
+
+test "test_unterminated_string" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const program =
+        \\("bar)
+    ;
+
+    const tokenized = try tokenize(allocator, program);
+    try std.testing.expectEqualStrings("Unterminated string: bar)", tokenized.errmsg);
 }
