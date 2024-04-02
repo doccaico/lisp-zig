@@ -101,9 +101,17 @@ pub const RParen = struct {
     }
 };
 
+const TokenError = struct {
+    msg: []const u8,
+
+    pub fn init(allocator: std.mem.Allocator, msg: []const u8) !TokenError {
+        return TokenError{ .msg = try std.fmt.allocPrint(allocator, "Tokenization error: {s}", .{msg}) };
+    }
+};
+
 const TokenizeResult = union(enum(u8)) {
     result: std.ArrayList(Token),
-    errmsg: []const u8,
+    err: TokenError,
 };
 
 pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !TokenizeResult {
@@ -129,7 +137,8 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !TokenizeResult
                 if (chars.items.len > 0 and chars.items[0] == '"') {
                     _ = chars.orderedRemove(0);
                 } else {
-                    return .{ .errmsg = try std.fmt.allocPrint(allocator, "Unterminated string: {s}", .{word.items}) };
+                    const err = try TokenError.init(allocator, try std.fmt.allocPrint(allocator, "Unterminated string: {s}", .{word.items}));
+                    return .{ .err = err };
                 }
                 try tokens.append(Token{ .String = .{ .value = word.items } });
             },
@@ -304,5 +313,5 @@ test "test_unterminated_string" {
     ;
 
     const tokenized = try tokenize(allocator, program);
-    try std.testing.expectEqualStrings("Unterminated string: bar)", tokenized.errmsg);
+    try std.testing.expectEqualStrings("Tokenization error: Unterminated string: bar)", tokenized.err.msg);
 }
