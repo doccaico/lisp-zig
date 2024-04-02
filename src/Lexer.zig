@@ -114,9 +114,9 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(
         var ch = chars.orderedRemove(0);
         switch (ch) {
             '(' => {
-                try tokens.append(Token{ .LParen = .{} });
+                try tokens.append(.{ .LParen = .{} });
             },
-            ')' => try tokens.append(Token{ .RParen = .{} }),
+            ')' => try tokens.append(.{ .RParen = .{} }),
             '"' => {
                 var word = std.ArrayList(u8).init(allocator);
                 while (chars.items.len > 0 and chars.items[0] != '"') {
@@ -128,7 +128,7 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(
                 } else {
                     return error.UnterminatedString;
                 }
-                try tokens.append(Token{ .String = .{ .value = word.items } });
+                try tokens.append(.{ .String = .{ .value = word.items } });
             },
             else => {
                 var word = std.ArrayList(u8).init(allocator);
@@ -142,15 +142,15 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(
                 }
 
                 if (word.items.len != 0) {
-                    const token = blk: {
+                    const token: Token = blk: {
                         const integer_result = isInteger(word.items);
-                        if (integer_result.ok) break :blk Token{ .Integer = .{ .value = integer_result.value } };
+                        if (integer_result.ok) break :blk .{ .Integer = .{ .value = integer_result.value } };
                         const float_result = isFloat(word.items);
-                        if (float_result.ok) break :blk Token{ .Float = .{ .value = float_result.value } };
-                        if (isKeyword(word.items)) break :blk Token{ .Keyword = .{ .value = word.items } };
-                        if (isIf(word.items)) break :blk Token{ .If = .{} };
-                        if (isBinaryOp(word.items)) break :blk Token{ .BinaryOp = .{ .value = word.items } };
-                        break :blk Token{ .Symbol = .{ .value = word.items } };
+                        if (float_result.ok) break :blk .{ .Float = .{ .value = float_result.value } };
+                        if (isKeyword(word.items)) break :blk .{ .Keyword = .{ .value = word.items } };
+                        if (isIf(word.items)) break :blk .{ .If = .{} };
+                        if (isBinaryOp(word.items)) break :blk .{ .BinaryOp = .{ .value = word.items } };
+                        break :blk .{ .Symbol = .{ .value = word.items } };
                     };
                     try tokens.append(token);
                 }
@@ -228,17 +228,17 @@ test "test_add" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const tokens = try tokenize(allocator, "(+ 1 2)");
+    const actual = try tokenize(allocator, "(+ 1 2)");
 
     const expected = [_]Token{
-        Token{ .LParen = .{} },
-        Token{ .BinaryOp = .{ .value = "+" } },
-        Token{ .Integer = .{ .value = 1 } },
-        Token{ .Integer = .{ .value = 2 } },
-        Token{ .RParen = .{} },
+        .{ .LParen = .{} },
+        .{ .BinaryOp = .{ .value = "+" } },
+        .{ .Integer = .{ .value = 1 } },
+        .{ .Integer = .{ .value = 2 } },
+        .{ .RParen = .{} },
     };
 
-    try std.testing.expectEqualDeep(expected[0..], tokens.items);
+    try std.testing.expectEqualDeep(expected[0..], actual.items);
 }
 
 test "test_area_of_a_circle" {
@@ -254,33 +254,33 @@ test "test_area_of_a_circle" {
         \\)
     ;
 
-    const tokens = try tokenize(allocator, program);
+    const actual = try tokenize(allocator, program);
 
     const expected = [_]Token{
-        Token{ .LParen = .{} },
-        Token{ .LParen = .{} },
-        Token{ .Keyword = .{ .value = "define" } },
-        Token{ .Symbol = .{ .value = "r" } },
-        Token{ .Integer = .{ .value = 10 } },
-        Token{ .RParen = .{} },
-        Token{ .LParen = .{} },
-        Token{ .Keyword = .{ .value = "define" } },
-        Token{ .Symbol = .{ .value = "pi" } },
-        Token{ .Integer = .{ .value = 314 } },
-        Token{ .RParen = .{} },
-        Token{ .LParen = .{} },
-        Token{ .BinaryOp = .{ .value = "*" } },
-        Token{ .Symbol = .{ .value = "pi" } },
-        Token{ .LParen = .{} },
-        Token{ .BinaryOp = .{ .value = "*" } },
-        Token{ .Symbol = .{ .value = "r" } },
-        Token{ .Symbol = .{ .value = "r" } },
-        Token{ .RParen = .{} },
-        Token{ .RParen = .{} },
-        Token{ .RParen = .{} },
+        .{ .LParen = .{} },
+        .{ .LParen = .{} },
+        .{ .Keyword = .{ .value = "define" } },
+        .{ .Symbol = .{ .value = "r" } },
+        .{ .Integer = .{ .value = 10 } },
+        .{ .RParen = .{} },
+        .{ .LParen = .{} },
+        .{ .Keyword = .{ .value = "define" } },
+        .{ .Symbol = .{ .value = "pi" } },
+        .{ .Integer = .{ .value = 314 } },
+        .{ .RParen = .{} },
+        .{ .LParen = .{} },
+        .{ .BinaryOp = .{ .value = "*" } },
+        .{ .Symbol = .{ .value = "pi" } },
+        .{ .LParen = .{} },
+        .{ .BinaryOp = .{ .value = "*" } },
+        .{ .Symbol = .{ .value = "r" } },
+        .{ .Symbol = .{ .value = "r" } },
+        .{ .RParen = .{} },
+        .{ .RParen = .{} },
+        .{ .RParen = .{} },
     };
 
-    try std.testing.expectEqualDeep(expected[0..], tokens.items);
+    try std.testing.expectEqualDeep(expected[0..], actual.items);
 }
 
 test "test_unterminated_string" {

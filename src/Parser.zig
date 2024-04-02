@@ -26,24 +26,24 @@ fn parse_list(allocator: std.mem.Allocator, tokens: *std.ArrayList(Lexer.Token))
     while (tokens.items.len != 0) {
         const token = tokens.popOrNull() orelse return error.NotEnoughTokens;
         switch (token) {
-            .Keyword => |x| try list.append(Object.Object{ .Keyword = Object.Keyword{ .value = x.value } }),
-            .If => try list.append(Object.Object{ .If = .{} }),
-            .BinaryOp => |x| try list.append(Object.Object{ .BinaryOp = Object.BinaryOp{ .value = x.value } }),
-            .Integer => |x| try list.append(Object.Object{ .Integer = Object.Integer{ .value = x.value } }),
-            .Float => |x| try list.append(Object.Object{ .Float = Object.Float{ .value = x.value } }),
-            .String => |x| try list.append(Object.Object{ .String = Object.String{ .value = x.value } }),
-            .Symbol => |x| try list.append(Object.Object{ .Symbol = Object.Symbol{ .value = x.value } }),
+            .Keyword => |x| try list.append(.{ .Keyword = .{ .value = x.value } }),
+            .If => try list.append(.{ .If = .{} }),
+            .BinaryOp => |x| try list.append(.{ .BinaryOp = .{ .value = x.value } }),
+            .Integer => |x| try list.append(.{ .Integer = .{ .value = x.value } }),
+            .Float => |x| try list.append(.{ .Float = .{ .value = x.value } }),
+            .String => |x| try list.append(.{ .String = .{ .value = x.value } }),
+            .Symbol => |x| try list.append(.{ .Symbol = .{ .value = x.value } }),
             .LParen => {
-                try tokens.append(Lexer.Token{ .LParen = .{} });
+                try tokens.append(.{ .LParen = .{} });
                 const sub_list = try parse_list(allocator, tokens);
                 try list.append(sub_list);
             },
             .RParen => {
-                return Object.Object{ .List = Object.List{ .list = list } };
+                return .{ .List = .{ .list = list } };
             },
         }
     }
-    return Object.Object{ .List = Object.List{ .list = list } };
+    return .{ .List = .{ .list = list } };
 }
 
 test "test_add" {
@@ -51,14 +51,72 @@ test "test_add" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const tokenized = try parse(allocator, "(+ 1 2)");
+    const actual = try parse(allocator, "(+ 1 2)");
 
     var a1 = std.ArrayList(Object.Object).init(allocator);
     try a1.append(.{ .BinaryOp = .{ .value = "+" } });
     try a1.append(.{ .Integer = .{ .value = 1 } });
     try a1.append(.{ .Integer = .{ .value = 2 } });
 
-    const expected = Object.Object{ .List = Object.List{ .list = a1 } };
+    const expected: Object.Object = .{ .List = .{ .list = a1 } };
 
-    try std.testing.expectEqualDeep(expected, tokenized);
+    try std.testing.expectEqualDeep(expected, actual);
+}
+
+test "test_area_of_a_circle" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const program =
+        \\(
+        \\    (define r 10)
+        \\    (define pi 314)
+        \\    (* pi (* r r))
+        \\)
+    ;
+
+    const actual = try parse(allocator, program);
+
+    const list1 = blk: {
+        var a = std.ArrayList(Object.Object).init(allocator);
+        try a.append(.{ .Keyword = .{ .value = "define" } });
+        try a.append(.{ .Symbol = .{ .value = "r" } });
+        try a.append(.{ .Integer = .{ .value = 10 } });
+        break :blk .{ .List = .{ .list = a } };
+    };
+
+    const list2 = blk: {
+        var a = std.ArrayList(Object.Object).init(allocator);
+        try a.append(.{ .Keyword = .{ .value = "define" } });
+        try a.append(.{ .Symbol = .{ .value = "pi" } });
+        try a.append(.{ .Integer = .{ .value = 314 } });
+        break :blk .{ .List = .{ .list = a } };
+    };
+
+    const list3 = blk: {
+        var b = std.ArrayList(Object.Object).init(allocator);
+        try b.append(.{ .BinaryOp = .{ .value = "*" } });
+        try b.append(.{ .Symbol = .{ .value = "r" } });
+        try b.append(.{ .Symbol = .{ .value = "r" } });
+
+        var a = std.ArrayList(Object.Object).init(allocator);
+        try a.append(.{ .BinaryOp = .{ .value = "*" } });
+        try a.append(.{ .Symbol = .{ .value = "pi" } });
+        try a.append(Object.Object{
+            .List = .{ .list = b },
+        });
+        break :blk .{ .List = .{ .list = a } };
+    };
+
+    var list = std.ArrayList(Object.Object).init(allocator);
+    try list.append(list1);
+    try list.append(list2);
+    try list.append(list3);
+
+    const expected: Object.Object = .{
+        .List = .{ .list = list },
+    };
+
+    try std.testing.expectEqualDeep(expected, actual);
 }
