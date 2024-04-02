@@ -103,7 +103,7 @@ test "test_area_of_a_circle" {
         var a = std.ArrayList(Object.Object).init(allocator);
         try a.append(.{ .BinaryOp = .{ .value = "*" } });
         try a.append(.{ .Symbol = .{ .value = "pi" } });
-        try a.append(Object.Object{
+        try a.append(.{
             .List = .{ .list = b },
         });
         break :blk .{ .List = .{ .list = a } };
