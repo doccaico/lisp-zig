@@ -71,7 +71,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                                 return .{ .Float = .{ .value = @as(f64, @floatFromInt(l.value)) + r.value } };
                             },
                             else => {
-                                return error.InvalidTypesPlusOperator;
+                                return error.InvalidTypesAddOperator;
                             },
                         }
                     },
@@ -86,12 +86,12 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                                 return .{ .Float = .{ .value = l.value + r.value } };
                             },
                             else => {
-                                return error.InvalidTypesPlusOperator;
+                                return error.InvalidTypesAddOperator;
                             },
                         }
                     },
                     else => {
-                        return error.InvalidTypesPlusOperator;
+                        return error.InvalidTypesAddOperator;
                     },
                 }
             } else if (std.mem.eql(u8, "-", x.value)) {
@@ -107,7 +107,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                                 return .{ .Float = .{ .value = @as(f64, @floatFromInt(l.value)) - r.value } };
                             },
                             else => {
-                                return error.InvalidTypesMinusOperator;
+                                return error.InvalidTypesSubOperator;
                             },
                         }
                     },
@@ -122,12 +122,84 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                                 return .{ .Float = .{ .value = l.value - r.value } };
                             },
                             else => {
-                                return error.InvalidTypesMinusOperator;
+                                return error.InvalidTypesSubOperator;
                             },
                         }
                     },
                     else => {
-                        return error.InvalidTypesMinusOperator;
+                        return error.InvalidTypesSubOperator;
+                    },
+                }
+            } else if (std.mem.eql(u8, "*", x.value)) {
+                switch (left) {
+                    .Integer => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Integer = .{ .value = l.value * r.value } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = @as(f64, @floatFromInt(l.value)) * r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesMulOperator;
+                            },
+                        }
+                    },
+                    .Float => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Float = .{ .value = l.value * @as(f64, @floatFromInt(r.value)) } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = l.value * r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesMulOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesMulOperator;
+                    },
+                }
+            } else if (std.mem.eql(u8, "/", x.value)) {
+                switch (left) {
+                    .Integer => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Integer = .{ .value = @divTrunc(l.value, r.value) } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = @divTrunc(@as(f64, @floatFromInt(l.value)), r.value) } };
+                            },
+                            else => {
+                                return error.InvalidTypesDivOperator;
+                            },
+                        }
+                    },
+                    .Float => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Float = .{ .value = @divTrunc(l.value, @as(f64, @floatFromInt(r.value))) } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = @divTrunc(l.value, r.value) } };
+                            },
+                            else => {
+                                return error.InvalidTypesDivOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesDivOperator;
                     },
                 }
             }
@@ -191,12 +263,86 @@ test "test_simple_sub" {
             .{ .Float = .{ .value = 0.5 } },
         },
         .{
-            "(- 3 2.5)",
-            .{ .Float = .{ .value = 0.5 } },
+            "(- 3.5 2.5)",
+            .{ .Float = .{ .value = 1.0 } },
         },
         .{
             "(- 2.5 1)",
             .{ .Float = .{ .value = 1.5 } },
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected: Object.Object = t[1];
+        try std.testing.expectEqual(expected, actual);
+    }
+}
+
+test "test_simple_mul" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+    const tests = [_]Test{
+        .{
+            "(* 1 2)",
+            .{ .Integer = .{ .value = 2 } },
+        },
+        .{
+            "(* 5 0.5)",
+            .{ .Float = .{ .value = 2.5 } },
+        },
+        .{
+            "(* 3.0 1.0)",
+            .{ .Float = .{ .value = 3.0 } },
+        },
+        .{
+            "(* 5.0 5)",
+            .{ .Float = .{ .value = 25.0 } },
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected: Object.Object = t[1];
+        try std.testing.expectEqual(expected, actual);
+    }
+}
+
+test "test_simple_div" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+    const tests = [_]Test{
+        .{
+            "(/ 10 2)",
+            .{ .Integer = .{ .value = 5 } },
+        },
+        .{
+            "(/ 5 0.5)",
+            .{ .Float = .{ .value = 10.0 } },
+        },
+        .{
+            "(/ 3.0 1.0)",
+            .{ .Float = .{ .value = 3.0 } },
+        },
+        .{
+            "(/ 5.0 5)",
+            .{ .Float = .{ .value = 1.0 } },
         },
     };
 
