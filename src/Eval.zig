@@ -94,6 +94,42 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesPlusOperator;
                     },
                 }
+            } else if (std.mem.eql(u8, "-", x.value)) {
+                switch (left) {
+                    .Integer => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Integer = .{ .value = l.value - r.value } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = @as(f64, @floatFromInt(l.value)) - r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesMinusOperator;
+                            },
+                        }
+                    },
+                    .Float => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Float = .{ .value = l.value - @as(f64, @floatFromInt(r.value)) } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = l.value - r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesMinusOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesMinusOperator;
+                    },
+                }
             }
         },
         else => {
@@ -124,6 +160,43 @@ test "test_simple_add" {
         .{
             "(+ 2.5 1)",
             .{ .Float = .{ .value = 3.5 } },
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected: Object.Object = t[1];
+        try std.testing.expectEqual(expected, actual);
+    }
+}
+
+test "test_simple_sub" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+    const tests = [_]Test{
+        .{
+            "(- 1 2)",
+            .{ .Integer = .{ .value = -1 } },
+        },
+        .{
+            "(- 1 0.5)",
+            .{ .Float = .{ .value = 0.5 } },
+        },
+        .{
+            "(- 3 2.5)",
+            .{ .Float = .{ .value = 0.5 } },
+        },
+        .{
+            "(- 2.5 1)",
+            .{ .Float = .{ .value = 1.5 } },
         },
     };
 
