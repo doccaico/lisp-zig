@@ -63,7 +63,7 @@ pub const Float = struct {
     value: f64,
 
     pub fn string(self: Float, writer: anytype) !void {
-        try writer.print("{f}", .{self.value});
+        try writer.print("{}", .{self.value});
     }
 };
 

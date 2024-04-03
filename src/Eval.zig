@@ -29,6 +29,9 @@ fn eval_obj(allocator: std.mem.Allocator, obj: *Object.Object, env: *Env) !Objec
             .Integer => |x| {
                 return .{ .Integer = .{ .value = x.value } };
             },
+            .Float => |x| {
+                return .{ .Float = .{ .value = x.value } };
+            },
             else => {
                 return error.InvalidObject;
             },
@@ -59,8 +62,28 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
-                            .Integer => |r| {
+                            .Integer,
+                            => |r| {
                                 return .{ .Integer = .{ .value = l.value + r.value } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = @as(f64, @floatFromInt(l.value)) + r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesPlusOperator;
+                            },
+                        }
+                    },
+                    .Float => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Float = .{ .value = l.value + @as(f64, @floatFromInt(r.value)) } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = l.value + r.value } };
                             },
                             else => {
                                 return error.InvalidTypesPlusOperator;
@@ -80,7 +103,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
     return .{ .Integer = .{ .value = -256 } };
 }
 
-test "test_simple_calc" {
+test "test_simple_add" {
     const Test = struct {
         []const u8,
         Object.Object,
@@ -89,6 +112,18 @@ test "test_simple_calc" {
         .{
             "(+ 1 2)",
             .{ .Integer = .{ .value = 3 } },
+        },
+        .{
+            "(+ 1 2.5)",
+            .{ .Float = .{ .value = 3.5 } },
+        },
+        .{
+            "(+ 2.5 2.5)",
+            .{ .Float = .{ .value = 5.0 } },
+        },
+        .{
+            "(+ 2.5 1)",
+            .{ .Float = .{ .value = 3.5 } },
         },
     };
 
