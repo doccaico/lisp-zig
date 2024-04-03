@@ -428,7 +428,6 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         switch (right) {
                             .String,
                             => |r| {
-                                // punk
                                 return .{ .Bool = .{ .value = std.mem.order(u8, l.value, r.value) != std.math.Order.eq } };
                             },
                             else => {
