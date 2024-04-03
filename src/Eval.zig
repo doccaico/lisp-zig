@@ -353,6 +353,42 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesLessThanOperator;
                     },
                 }
+            } else if (std.mem.eql(u8, "%", x.value)) {
+                switch (left) {
+                    .Integer => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Integer = .{ .value = @mod(l.value, r.value) } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = @mod(@as(f64, @floatFromInt(l.value)), r.value) } };
+                            },
+                            else => {
+                                return error.InvalidTypesModuloOperator;
+                            },
+                        }
+                    },
+                    .Float => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Float = .{ .value = @mod(l.value, @as(f64, @floatFromInt(r.value))) } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Float = .{ .value = @mod(l.value, r.value) } };
+                            },
+                            else => {
+                                return error.InvalidTypesModuloOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesModuloOperator;
+                    },
+                }
             }
         },
         else => {
@@ -572,6 +608,41 @@ test "test_string_compare" {
     }
 }
 
+test "test_string_with_spaces" {
+    const Test = struct {
+        []const u8,
+        []const u8,
+    };
+    const tests = [_]Test{
+        .{
+            "(+ \"Raleigh \" \"Durham\")",
+            "Raleigh Durham",
+        },
+        // TODO
+        // .{
+        //     \\(
+        //     \\    (define fruits "apples mangoes bananas ")
+        //     \\    (define vegetables "carrots broccoli")
+        //     \\    (+ fruits vegetables)
+        //     \\)
+        //     ,
+        //     "apples mangoes bananas carrots broccoli",
+        // },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected = t[1];
+        try std.testing.expectEqualStrings(expected, actual.String.value);
+    }
+}
+
 test "test_number_compare" {
     const Test = struct {
         []const u8,
@@ -638,5 +709,42 @@ test "test_number_compare" {
         const actual = try eval(allocator, t[0], env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual.Bool.value);
+    }
+}
+
+test "test_modulo" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+    const tests = [_]Test{
+        .{
+            "(% 10 3)",
+            .{ .Integer = .{ .value = 1 } },
+        },
+        .{
+            "(% 10 3.0)",
+            .{ .Float = .{ .value = 1.0 } },
+        },
+        .{
+            "(% 10.0 3.0)",
+            .{ .Float = .{ .value = 1.0 } },
+        },
+        .{
+            "(% 10.0 3)",
+            .{ .Float = .{ .value = 1.0 } },
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual);
     }
 }
