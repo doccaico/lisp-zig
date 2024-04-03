@@ -35,6 +35,9 @@ fn eval_obj(allocator: std.mem.Allocator, obj: *Object.Object, env: *Env) !Objec
             .String => |x| {
                 return .{ .String = .{ .value = x.value } };
             },
+            .Bool => |x| {
+                return .{ .Bool = .{ .value = x.value } };
+            },
             else => {
                 return error.InvalidObject;
             },
@@ -217,6 +220,128 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesDivOperator;
                     },
                 }
+            } else if (std.mem.eql(u8, "=", x.value)) {
+                switch (left) {
+                    .Integer => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value == r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesEqOperator;
+                            },
+                        }
+                    },
+                    .String => |l| {
+                        switch (right) {
+                            .String,
+                            => |r| {
+                                return .{ .Bool = .{ .value = std.mem.eql(u8, l.value, r.value) } };
+                            },
+                            else => {
+                                return error.InvalidTypesEqOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesEqOperator;
+                    },
+                }
+            } else if (std.mem.eql(u8, ">", x.value)) {
+                switch (left) {
+                    .Integer => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value > r.value } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Bool = .{ .value = @as(f64, @floatFromInt(l.value)) > r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesGreaterThanOperator;
+                            },
+                        }
+                    },
+                    .Float => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value > @as(f64, @floatFromInt(r.value)) } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value > r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesGreaterThanOperator;
+                            },
+                        }
+                    },
+                    .String => |l| {
+                        switch (right) {
+                            .String,
+                            => |r| {
+                                return .{ .Bool = .{ .value = std.mem.order(u8, l.value, r.value) == std.math.Order.gt } };
+                            },
+                            else => {
+                                return error.InvalidTypesGreaterThanOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesGreaterThanOperator;
+                    },
+                }
+            } else if (std.mem.eql(u8, "<", x.value)) {
+                switch (left) {
+                    .Integer => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value < r.value } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Bool = .{ .value = @as(f64, @floatFromInt(l.value)) < r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesLessThanOperator;
+                            },
+                        }
+                    },
+                    .Float => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value < @as(f64, @floatFromInt(r.value)) } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value < r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesLessThanOperator;
+                            },
+                        }
+                    },
+                    .String => |l| {
+                        switch (right) {
+                            .String,
+                            => |r| {
+                                return .{ .Bool = .{ .value = std.mem.order(u8, l.value, r.value) == std.math.Order.lt } };
+                            },
+                            else => {
+                                return error.InvalidTypesLessThanOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesLessThanOperator;
+                    },
+                }
             }
         },
         else => {
@@ -374,15 +499,15 @@ test "test_simple_div" {
     }
 }
 
-test "test_string" {
+test "test_string_add" {
     const Test = struct {
         []const u8,
-        Object.Object,
+        []const u8,
     };
     const tests = [_]Test{
         .{
             "(+ \"Raleigh\" \"Durham\")",
-            .{ .String = .{ .value = "RaleighDurham" } },
+            "RaleighDurham",
         },
     };
 
@@ -394,8 +519,44 @@ test "test_string" {
 
     for (tests) |t| {
         const actual = try eval(allocator, t[0], env);
-        const expected: Object.Object = t[1];
-        // try std.testing.expectEqual(expected, actual);
-        try std.testing.expect(std.mem.eql(u8, expected.String.value, actual.String.value));
+        const expected = t[1];
+        try std.testing.expect(std.mem.eql(u8, expected, actual.String.value));
+    }
+}
+
+test "test_string_compare" {
+    const Test = struct {
+        []const u8,
+        bool,
+    };
+    const tests = [_]Test{
+        .{
+            "(= \"Raleigh\" \"Durham\")",
+            false,
+        },
+        .{
+            "(= \"Raleigh\" \"Raleigh\")",
+            true,
+        },
+        .{
+            "(> \"Raleigh\" \"Durham\")",
+            true,
+        },
+        .{
+            "(< \"abcd\" \"abef\")",
+            true,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Bool.value);
     }
 }

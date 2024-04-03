@@ -68,6 +68,7 @@ pub const Float = struct {
 };
 
 pub const Bool = struct {
+    value: bool,
     pub fn string(self: Bool, writer: anytype) !void {
         try writer.print("{}", .{self.value});
     }
