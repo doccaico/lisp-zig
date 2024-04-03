@@ -514,7 +514,7 @@ test "test_simple_add" {
 
     for (tests) |t| {
         const actual = try eval(allocator, t[0], env);
-        const expected: Object.Object = t[1];
+        const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
 }
@@ -551,7 +551,7 @@ test "test_simple_sub" {
 
     for (tests) |t| {
         const actual = try eval(allocator, t[0], env);
-        const expected: Object.Object = t[1];
+        const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
 }
@@ -588,7 +588,7 @@ test "test_simple_mul" {
 
     for (tests) |t| {
         const actual = try eval(allocator, t[0], env);
-        const expected: Object.Object = t[1];
+        const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
 }
@@ -625,7 +625,7 @@ test "test_simple_div" {
 
     for (tests) |t| {
         const actual = try eval(allocator, t[0], env);
-        const expected: Object.Object = t[1];
+        const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
 }
