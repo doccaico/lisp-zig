@@ -233,6 +233,17 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                             },
                         }
                     },
+                    .Float => |l| {
+                        switch (right) {
+                            .Float,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value == r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesEqOperator;
+                            },
+                        }
+                    },
                     .String => |l| {
                         switch (right) {
                             .String,
@@ -545,6 +556,75 @@ test "test_string_compare" {
         .{
             "(< \"abcd\" \"abef\")",
             true,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Bool.value);
+    }
+}
+
+test "test_number_compare" {
+    const Test = struct {
+        []const u8,
+        bool,
+    };
+    const tests = [_]Test{
+        .{
+            "(> 1 2)",
+            false,
+        },
+        .{
+            "(> 1 2.0)",
+            false,
+        },
+        .{
+            "(> 2.5 2.0)",
+            true,
+        },
+        .{
+            "(> 2.5 2)",
+            true,
+        },
+        .{
+            "(< 1 2)",
+            true,
+        },
+        .{
+            "(< 1 2.0)",
+            true,
+        },
+        .{
+            "(< 2.5 2.0)",
+            false,
+        },
+        .{
+            "(< 2.5 2)",
+            false,
+        },
+        .{
+            "(= 2 2)",
+            true,
+        },
+        .{
+            "(= 2 4)",
+            false,
+        },
+        .{
+            "(= 2.0 2.0)",
+            true,
+        },
+        .{
+            "(= 2.0 4.0)",
+            false,
         },
     };
 
