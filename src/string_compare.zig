@@ -41,6 +41,7 @@ pub fn main() !void {
         const b: i64 = 3;
         const c: i64 = a % b;
         print("{d}\n", .{c});
+        print("{any}\n", .{true and true});
         // print("{d:.2}\n", .{@mod(a, b)});
     }
 }

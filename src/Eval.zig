@@ -23,6 +23,9 @@ fn eval_obj(allocator: std.mem.Allocator, obj: *Object.Object, env: *Env) !Objec
                     .BinaryOp => {
                         return eval_binary_op(allocator, x.list, current_env);
                     },
+                    .Symbol => {
+                        return error.Todo;
+                    },
                     else => {},
                 }
             },
@@ -389,6 +392,88 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesModuloOperator;
                     },
                 }
+            } else if (std.mem.eql(u8, "!=", x.value)) {
+                switch (left) {
+                    .Integer => |l| {
+                        switch (right) {
+                            .Integer,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value != r.value } };
+                            },
+                            .Float,
+                            => |r| {
+                                return .{ .Bool = .{ .value = @as(f64, @floatFromInt(l.value)) != r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesNotEqOperator;
+                            },
+                        }
+                    },
+                    .Float => |l| {
+                        switch (right) {
+                            .Float,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value != r.value } };
+                            },
+                            .Integer,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value != @as(f64, @floatFromInt(r.value)) } };
+                            },
+                            else => {
+                                return error.InvalidTypesNotEqOperator;
+                            },
+                        }
+                    },
+                    .String => |l| {
+                        switch (right) {
+                            .String,
+                            => |r| {
+                                // punk
+                                return .{ .Bool = .{ .value = std.mem.order(u8, l.value, r.value) != std.math.Order.eq } };
+                            },
+                            else => {
+                                return error.InvalidTypesEqOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesEqOperator;
+                    },
+                }
+            } else if (std.mem.eql(u8, "and", x.value)) {
+                switch (left) {
+                    .Bool => |l| {
+                        switch (right) {
+                            .Bool,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value and r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesAndOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesAndOperator;
+                    },
+                }
+            } else if (std.mem.eql(u8, "or", x.value)) {
+                switch (left) {
+                    .Bool => |l| {
+                        switch (right) {
+                            .Bool,
+                            => |r| {
+                                return .{ .Bool = .{ .value = l.value or r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesOrOperator;
+                            },
+                        }
+                    },
+                    else => {
+                        return error.InvalidTypesOrOperator;
+                    },
+                }
             }
         },
         else => {
@@ -593,6 +678,14 @@ test "test_string_compare" {
             "(< \"abcd\" \"abef\")",
             true,
         },
+        .{
+            "(!= \"Raleigh\" \"Durham\")",
+            true,
+        },
+        .{
+            "(!= \"abcd\" \"abcd\")",
+            false,
+        },
     };
 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -697,6 +790,22 @@ test "test_number_compare" {
             "(= 2.0 4.0)",
             false,
         },
+        .{
+            "(!= 2 2)",
+            false,
+        },
+        .{
+            "(!= 2 2.0)",
+            false,
+        },
+        .{
+            "(!= 2.0 4.0)",
+            true,
+        },
+        .{
+            "(!= 2.0 4)",
+            true,
+        },
     };
 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -746,5 +855,42 @@ test "test_modulo" {
         const actual = try eval(allocator, t[0], env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual);
+    }
+}
+
+test "test_and_or" {
+    const Test = struct {
+        []const u8,
+        bool,
+    };
+    const tests = [_]Test{
+        .{
+            "(and (= 1 1) (= 2 2))",
+            true,
+        },
+        .{
+            "(and (= 1 1) (= 1 2)",
+            false,
+        },
+        .{
+            "(or (= 1 1) (= 1 2))",
+            true,
+        },
+        .{
+            "(or (= 1 2) (= 1 2)",
+            false,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Bool.value);
     }
 }
