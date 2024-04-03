@@ -283,14 +283,10 @@ test "test_area_of_a_circle" {
     try std.testing.expectEqualDeep(expected[0..], actual.items);
 }
 
-test "test_unterminated_string" {
+test "test_error_unterminated_string" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const program =
-        \\("bar)
-    ;
-
-    try std.testing.expectError(error.UnterminatedString, tokenize(allocator, program));
+    try std.testing.expectError(error.UnterminatedString, tokenize(allocator, "(define foo \"bar)"));
 }

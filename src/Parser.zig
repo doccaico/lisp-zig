@@ -24,7 +24,7 @@ fn parse_list(allocator: std.mem.Allocator, tokens: *std.ArrayList(Lexer.Token))
 
     var list = std.ArrayList(Object.Object).init(allocator);
     while (tokens.items.len != 0) {
-        const token = tokens.popOrNull() orelse return error.NotEnoughTokens;
+        const token = tokens.pop();
         switch (token) {
             .Keyword => |x| try list.append(.{ .Keyword = .{ .value = x.value } }),
             .If => try list.append(.{ .If = .{} }),
@@ -119,4 +119,12 @@ test "test_area_of_a_circle" {
     };
 
     try std.testing.expectEqualDeep(expected, actual);
+}
+
+test "test_error_expected_lparen" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try std.testing.expectError(error.ExpectedLParen, parse(allocator, "define bar 1)"));
 }
