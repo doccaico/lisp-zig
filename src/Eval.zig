@@ -32,6 +32,9 @@ fn eval_obj(allocator: std.mem.Allocator, obj: *Object.Object, env: *Env) !Objec
             .Float => |x| {
                 return .{ .Float = .{ .value = x.value } };
             },
+            .String => |x| {
+                return .{ .String = .{ .value = x.value } };
+            },
             else => {
                 return error.InvalidObject;
             },
@@ -84,6 +87,18 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                             .Float,
                             => |r| {
                                 return .{ .Float = .{ .value = l.value + r.value } };
+                            },
+                            else => {
+                                return error.InvalidTypesAddOperator;
+                            },
+                        }
+                    },
+                    .String => |l| {
+                        switch (right) {
+                            .String,
+                            => |r| {
+                                const str = try std.fmt.allocPrint(allocator, "{s}{s}", .{ l.value, r.value });
+                                return .{ .String = .{ .value = str } };
                             },
                             else => {
                                 return error.InvalidTypesAddOperator;
@@ -356,5 +371,31 @@ test "test_simple_div" {
         const actual = try eval(allocator, t[0], env);
         const expected: Object.Object = t[1];
         try std.testing.expectEqual(expected, actual);
+    }
+}
+
+test "test_string" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+    const tests = [_]Test{
+        .{
+            "(+ \"Raleigh\" \"Durham\")",
+            .{ .String = .{ .value = "RaleighDurham" } },
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected: Object.Object = t[1];
+        // try std.testing.expectEqual(expected, actual);
+        try std.testing.expect(std.mem.eql(u8, expected.String.value, actual.String.value));
     }
 }
