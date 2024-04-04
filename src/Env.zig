@@ -15,3 +15,11 @@ pub fn init(allocator: std.mem.Allocator) !*Env {
     };
     return env;
 }
+
+pub fn get(self: *Env, key: []const u8) ?Object.Object {
+    return self.vars.get(key);
+}
+
+pub fn set(self: *Env, key: []const u8, value: Object.Object) !void {
+    try self.vars.put(key, value);
+}

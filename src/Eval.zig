@@ -9,11 +9,11 @@ pub fn eval(allocator: std.mem.Allocator, program: []const u8, env: *Env) !Objec
     return try eval_obj(allocator, &parsed_list, env);
 }
 
-fn eval_obj(allocator: std.mem.Allocator, obj: *Object.Object, env: *Env) !Object.Object {
+fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) !Object.Object {
     const current_obj = try allocator.create(Object.Object);
-    current_obj.* = obj.*;
-    const current_env = try allocator.create(Env);
-    current_env.* = env.*;
+    current_obj.* = object.*;
+    // const current_env = try allocator.create(Env);
+    const current_env = env;
 
     while (true) {
         switch (current_obj.*) {
@@ -23,11 +23,36 @@ fn eval_obj(allocator: std.mem.Allocator, obj: *Object.Object, env: *Env) !Objec
                     .BinaryOp => {
                         return eval_binary_op(allocator, x.list, current_env);
                     },
+                    .Keyword => {
+                        return eval_keyword(allocator, x.list, current_env);
+                    },
                     .Symbol => {
                         return error.Todo;
                     },
-                    else => {},
+                    else => {
+                        var new_list = std.ArrayList(Object.Object).init(allocator);
+                        for (x.list.items) |*obj| {
+                            const result = try eval_obj(allocator, obj, env);
+                            switch (result) {
+                                .Void => {},
+                                else => try new_list.append(result),
+                            }
+                        }
+                        switch (new_list.items[0]) {
+                            .Lambda => |y| {
+                                _ = y;
+                                return error.Todo;
+                            },
+                            else => return .{ .List = .{ .list = new_list } },
+                        }
+                    },
                 }
+            },
+            .Void => {
+                return .{ .Void = {} };
+            },
+            .Symbol => |x| {
+                return try eval_symbol(x.value, current_env);
             },
             .Integer => |x| {
                 return .{ .Integer = .{ .value = x.value } };
@@ -59,7 +84,7 @@ fn eval_obj(allocator: std.mem.Allocator, obj: *Object.Object, env: *Env) !Objec
 
 fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) anyerror!Object.Object {
     if (list.items.len != 3) {
-        return error.InvalidNumberForInfixOperator;
+        return error.InvalidNumberArgsForInfixOperator;
     }
     const operator = list.items[0];
     const left = try eval_obj(allocator, &list.items[1], env);
@@ -67,7 +92,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
 
     switch (operator) {
         .BinaryOp => |x| {
-            if (std.mem.eql(u8, "+", x.value)) {
+            if (std.mem.eql(u8, x.value, "+")) {
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
@@ -115,7 +140,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesAddOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, "-", x.value)) {
+            } else if (std.mem.eql(u8, x.value, "-")) {
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
@@ -151,7 +176,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesSubOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, "*", x.value)) {
+            } else if (std.mem.eql(u8, x.value, "*")) {
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
@@ -187,7 +212,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesMulOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, "/", x.value)) {
+            } else if (std.mem.eql(u8, x.value, "/")) {
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
@@ -223,7 +248,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesDivOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, "=", x.value)) {
+            } else if (std.mem.eql(u8, x.value, "=")) {
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
@@ -262,7 +287,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesEqOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, ">", x.value)) {
+            } else if (std.mem.eql(u8, x.value, ">")) {
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
@@ -309,7 +334,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesGreaterThanOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, "<", x.value)) {
+            } else if (std.mem.eql(u8, x.value, "<")) {
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
@@ -356,7 +381,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesLessThanOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, "%", x.value)) {
+            } else if (std.mem.eql(u8, x.value, "%")) {
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
@@ -392,7 +417,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesModuloOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, "!=", x.value)) {
+            } else if (std.mem.eql(u8, x.value, "!=")) {
                 switch (left) {
                     .Integer => |l| {
                         switch (right) {
@@ -439,7 +464,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesEqOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, "and", x.value)) {
+            } else if (std.mem.eql(u8, x.value, "and")) {
                 switch (left) {
                     .Bool => |l| {
                         switch (right) {
@@ -456,7 +481,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
                         return error.InvalidTypesAndOperator;
                     },
                 }
-            } else if (std.mem.eql(u8, "or", x.value)) {
+            } else if (std.mem.eql(u8, x.value, "or")) {
                 switch (left) {
                     .Bool => |l| {
                         switch (right) {
@@ -480,6 +505,54 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
         },
     }
     return .{ .Integer = .{ .value = -256 } };
+}
+
+fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) anyerror!Object.Object {
+    const head = list.items[0];
+    switch (head) {
+        .Keyword => |x| {
+            if (std.mem.eql(u8, x.value, "define")) {
+                return eval_define(allocator, list, env);
+            } else {
+                return error.UnknownKeyword;
+            }
+        },
+        else => {
+            return error.InvalidKeyword;
+        },
+    }
+}
+
+fn eval_define(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) anyerror!Object.Object {
+    if (list.items.len != 3) {
+        return error.InvalidNumberArgsForDefine;
+    }
+
+    const sym = switch (list.items[1]) {
+        .Symbol => |x| x,
+        .List => |x| {
+            // TODO
+            _ = x;
+            return error.Todo;
+        },
+        else => return error.InvalidDefine,
+    };
+    const val = try eval_obj(allocator, &list.items[2], env);
+
+    try env.set(sym.value, val);
+    return .{ .Void = {} };
+}
+
+fn eval_symbol(sym: []const u8, env: *Env) !Object.Object {
+    if (std.mem.eql(u8, sym, "#t")) {
+        return .{ .Bool = .{ .value = true } };
+    } else if (std.mem.eql(u8, sym, "#f")) {
+        return .{ .Bool = .{ .value = false } };
+    } else if (std.mem.eql(u8, sym, "#nil")) {
+        return .{ .Void = {} };
+    }
+
+    return env.get(sym) orelse error.UnboundSymbol;
 }
 
 test "test_simple_add" {
@@ -700,7 +773,7 @@ test "test_string_compare" {
     }
 }
 
-test "test_string_with_spaces" {
+test "test_string_with_spaces1" {
     const Test = struct {
         []const u8,
         []const u8,
@@ -710,16 +783,6 @@ test "test_string_with_spaces" {
             "(+ \"Raleigh \" \"Durham\")",
             "Raleigh Durham",
         },
-        // TODO
-        // .{
-        //     \\(
-        //     \\    (define fruits "apples mangoes bananas ")
-        //     \\    (define vegetables "carrots broccoli")
-        //     \\    (+ fruits vegetables)
-        //     \\)
-        //     ,
-        //     "apples mangoes bananas carrots broccoli",
-        // },
     };
 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -891,5 +954,60 @@ test "test_and_or" {
         const actual = try eval(allocator, t[0], env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual.Bool.value);
+    }
+}
+
+test "test_define" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+    const tests = [_]Test{
+        .{
+            "(define foobar 1)",
+            .{ .Void = {} },
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual);
+    }
+}
+
+test "test_string_with_spaces2" {
+    const Test = struct {
+        []const u8,
+        []const u8,
+    };
+    const tests = [_]Test{
+        .{
+            \\(
+            \\    (define fruits "apples mangoes bananas ")
+            \\    (define vegetables "carrots broccoli")
+            \\    (+ fruits vegetables)
+            \\)
+            ,
+            "apples mangoes bananas carrots broccoli",
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected = t[1];
+        try std.testing.expectEqualStrings(expected, actual.List.list.items[0].String.value);
     }
 }
