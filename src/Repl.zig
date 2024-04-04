@@ -10,7 +10,7 @@ const PROMPT = "lisp-zig> ";
 const DELIMITER = if (builtin.os.tag == .windows) '\r' else '\n';
 
 pub fn start(allocator: std.mem.Allocator, stdin: anytype, stdout: anytype) !void {
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     loop: while (true) {
         try stdout.writeAll(PROMPT);
@@ -36,7 +36,7 @@ pub fn start(allocator: std.mem.Allocator, stdin: anytype, stdout: anytype) !voi
             break :loop;
         }
 
-        const val = try Eval.eval(allocator, line, env);
+        const val = try Eval.eval(allocator, line, &env);
 
         switch (val) {
             .Void => {},

@@ -101,8 +101,8 @@ pub const ListData = struct {
 };
 
 pub const Lambda = struct {
-    params: std.ArrayList(String),
-    body: *std.ArrayList(Object),
+    params: std.ArrayList([]const u8),
+    body: std.ArrayList(Object),
     env: *Env,
 
     pub fn string(self: Lambda, writer: anytype) !void {

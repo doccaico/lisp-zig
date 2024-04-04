@@ -12,8 +12,14 @@ pub fn eval(allocator: std.mem.Allocator, program: []const u8, env: *Env) !Objec
 fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) !Object.Object {
     var current_obj = try allocator.create(Object.Object);
     current_obj.* = object.*;
-    // const current_env = try allocator.create(Env);
-    const current_env = env;
+    // var current_env = try allocator.create(Env);
+    var current_env = env;
+    // current_env.* = env;
+
+    // var current_env = try allocator.create(Env);
+    // current_env.allocator = allocator;
+    // current_env.vars = env.vars;
+    // current_env.parent = env.parent;
 
     while (true) {
         switch (current_obj.*) {
@@ -47,8 +53,42 @@ fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) !Ob
                         }
                         continue;
                     },
-                    .Symbol => {
-                        return error.Todo;
+                    .Lambda => |y| {
+                        const new_env = try env.extend(y.env);
+                        for (y.params.items, 0..) |param, i| {
+                            const val = try eval_obj(allocator, &x.list.items[i + 1], current_env);
+                            try new_env.set(param, val);
+                        }
+
+                        const new_obj = try allocator.create(Object.Object);
+                        new_obj.* = .{ .List = .{ .list = y.body } };
+                        current_obj = new_obj;
+
+                        current_env = new_env;
+
+                        continue;
+                    },
+                    .Symbol => |y| {
+                        const lambda = current_env.get(y.value) orelse return error.UnboundFunction;
+                        const func = lambda;
+                        switch (func) {
+                            .Lambda => |z| {
+                                const new_env = try env.extend(z.env);
+
+                                for (z.params.items, 0..) |param, i| {
+                                    const val = try eval_obj(allocator, &x.list.items[i + 1], current_env);
+                                    try new_env.set(param, val);
+                                }
+                                const new_obj = try allocator.create(Object.Object);
+                                new_obj.* = .{ .List = .{ .list = z.body } };
+                                current_obj = new_obj;
+
+                                current_env = new_env;
+
+                                continue;
+                            },
+                            else => return error.NotALambda,
+                        }
                     },
                     else => {
                         var new_list = std.ArrayList(Object.Object).init(allocator);
@@ -534,6 +574,8 @@ fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object)
         .Keyword => |x| {
             if (std.mem.eql(u8, x.value, "define")) {
                 return eval_define(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "lambda")) {
+                return eval_function_definition(allocator, list, env);
             } else {
                 return error.UnknownKeyword;
             }
@@ -562,6 +604,33 @@ fn eval_define(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object),
 
     try env.set(sym.value, val);
     return .{ .Void = {} };
+}
+
+fn eval_function_definition(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) anyerror!Object.Object {
+    const params = blk: {
+        switch (list.items[1]) {
+            .List => |x| {
+                var params = std.ArrayList([]const u8).init(allocator);
+                for (x.list.items) |param| {
+                    switch (param) {
+                        .Symbol => |y| try params.append(y.value),
+                        else => return error.InvalidLambdaParameter,
+                    }
+                }
+                break :blk params;
+            },
+            else => return error.InvalidLambda,
+        }
+    };
+
+    const body = blk: {
+        switch (list.items[2]) {
+            .List => |x| break :blk x.list,
+            else => return error.InvalidLambda,
+        }
+    };
+
+    return .{ .Lambda = .{ .params = params, .body = body, .env = env } };
 }
 
 fn eval_symbol(sym: []const u8, env: *Env) !Object.Object {
@@ -604,10 +673,10 @@ test "test_simple_add" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
@@ -641,10 +710,10 @@ test "test_simple_sub" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
@@ -678,10 +747,10 @@ test "test_simple_mul" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
@@ -715,10 +784,10 @@ test "test_simple_div" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
@@ -740,10 +809,10 @@ test "test_string_add" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expect(std.mem.eql(u8, expected, actual.String.value));
     }
@@ -785,10 +854,10 @@ test "test_string_compare" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual.Bool.value);
     }
@@ -810,10 +879,10 @@ test "test_string_with_spaces1" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqualStrings(expected, actual.String.value);
     }
@@ -895,10 +964,10 @@ test "test_number_compare" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual.Bool.value);
     }
@@ -932,10 +1001,10 @@ test "test_modulo" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
@@ -969,10 +1038,10 @@ test "test_and_or" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual.Bool.value);
     }
@@ -994,10 +1063,10 @@ test "test_define" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual);
     }
@@ -1024,10 +1093,10 @@ test "test_string_with_spaces2" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqualStrings(expected, actual.List.list.items[0].String.value);
     }
@@ -1055,11 +1124,40 @@ test "test_if" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const env = try Env.init(allocator);
+    var env = try Env.init(allocator);
 
     for (tests) |t| {
-        const actual = try eval(allocator, t[0], env);
+        const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqualStrings(expected, actual.String.value);
+    }
+}
+
+test "test_lambda" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (
+            \\     (define add (lambda (a b) (+ a b)))
+            \\     (add 1 2)
+            \\ )
+            ,
+            .{ .Integer = .{ .value = 3 } },
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.List.list.items[0]);
     }
 }
