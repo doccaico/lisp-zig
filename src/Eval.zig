@@ -12,14 +12,8 @@ pub fn eval(allocator: std.mem.Allocator, program: []const u8, env: *Env) !Objec
 fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) !Object.Object {
     var current_obj = try allocator.create(Object.Object);
     current_obj.* = object.*;
-    // var current_env = try allocator.create(Env);
-    var current_env = env;
-    // current_env.* = env;
 
-    // var current_env = try allocator.create(Env);
-    // current_env.allocator = allocator;
-    // current_env.vars = env.vars;
-    // current_env.parent = env.parent;
+    var current_env = env;
 
     while (true) {
         switch (current_obj.*) {
