@@ -10,7 +10,7 @@ pub fn eval(allocator: std.mem.Allocator, program: []const u8, env: *Env) !Objec
 }
 
 fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) !Object.Object {
-    const current_obj = try allocator.create(Object.Object);
+    var current_obj = try allocator.create(Object.Object);
     current_obj.* = object.*;
     // const current_env = try allocator.create(Env);
     const current_env = env;
@@ -25,6 +25,27 @@ fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) !Ob
                     },
                     .Keyword => {
                         return eval_keyword(allocator, x.list, current_env);
+                    },
+                    .If => {
+                        if (x.list.items.len != 4) {
+                            return error.InvalidNumberArgsForIfStatement;
+                        }
+
+                        const cond_obj = try eval_obj(allocator, &x.list.items[1], current_env);
+                        var cond: Object.Bool = undefined;
+                        switch (cond_obj) {
+                            .Bool => |y| cond = y,
+                            else => return error.ConditionMustBeBoolean,
+                        }
+
+                        if (cond.value) {
+                            current_obj = try allocator.create(Object.Object);
+                            current_obj.* = x.list.items[2];
+                        } else {
+                            current_obj = try allocator.create(Object.Object);
+                            current_obj.* = x.list.items[3];
+                        }
+                        continue;
                     },
                     .Symbol => {
                         return error.Todo;
@@ -1009,5 +1030,36 @@ test "test_string_with_spaces2" {
         const actual = try eval(allocator, t[0], env);
         const expected = t[1];
         try std.testing.expectEqualStrings(expected, actual.List.list.items[0].String.value);
+    }
+}
+
+test "test_if" {
+    const Test = struct {
+        []const u8,
+        []const u8,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (if (> 2 1) "foo" "bar")
+            ,
+            "foo",
+        },
+        .{
+            \\ (if (< 2 1) "foo" "bar")
+            ,
+            "bar",
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], env);
+        const expected = t[1];
+        try std.testing.expectEqualStrings(expected, actual.String.value);
     }
 }
