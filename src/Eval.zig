@@ -63,9 +63,11 @@ fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) any
                         continue;
                     },
                     .Symbol => |y| {
-                        const lambda = current_env.get(y.value) orelse return error.UnboundFunction;
-                        const func = lambda;
-                        switch (func) {
+                        const sym = current_env.get(y.value) orelse return error.UnboundSymbol;
+
+                        switch (sym) {
+                            .Integer => |z| return .{ .Integer = .{ .value = z.value } },
+                            .String => |z| return .{ .String = .{ .value = z.value } },
                             .Lambda => |z| {
                                 const new_env = try env.extend(z.env);
 
@@ -750,6 +752,7 @@ fn eval_map(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), en
         const result = try eval_obj(allocator, &new_obj, new_env);
         try result_list.append(result);
     }
+
     return .{ .ListData = .{ .list = result_list } };
 }
 

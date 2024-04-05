@@ -30,7 +30,7 @@ pub const Float = struct {
     value: f64,
 
     pub fn string(self: Float, writer: anytype) !void {
-        try writer.print("{f}", .{self.value});
+        try writer.print("{d}", .{self.value});
     }
 };
 
@@ -74,7 +74,7 @@ pub const If = struct {
 
 pub const LParen = struct {
     pub fn string(_: LParen, writer: anytype) !void {
-        try writer.writeAll("()");
+        try writer.writeAll("(");
     }
 };
 
@@ -93,6 +93,7 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(
     if (chars.items.len == 0) {
         return tokens;
     }
+
     while (chars.items.len > 0) {
         var ch = chars.orderedRemove(0);
         switch (ch) {

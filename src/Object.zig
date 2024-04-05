@@ -71,7 +71,9 @@ pub const String = struct {
     value: []const u8,
 
     pub fn inspect(self: String, writer: anytype) !void {
+        try writer.writeAll("\"");
         try writer.writeAll(self.value);
+        try writer.writeAll("\"");
     }
 };
 
