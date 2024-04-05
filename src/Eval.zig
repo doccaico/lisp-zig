@@ -9,7 +9,7 @@ pub fn eval(allocator: std.mem.Allocator, program: []const u8, env: *Env) !Objec
     return try eval_obj(allocator, &parsed_list, env);
 }
 
-fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) !Object.Object {
+fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) anyerror!Object.Object {
     var current_obj = try allocator.create(Object.Object);
     current_obj.* = object.*;
 
@@ -140,7 +140,7 @@ fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) !Ob
     return .{ .Integer = .{ .value = -256 } };
 }
 
-fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) anyerror!Object.Object {
+fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
     if (list.items.len != 3) {
         return error.InvalidNumberArgsForInfixOperator;
     }
@@ -565,7 +565,7 @@ fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
     return .{ .Integer = .{ .value = -256 } };
 }
 
-fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) anyerror!Object.Object {
+fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
     const head = list.items[0];
     switch (head) {
         .Keyword => |x| {
@@ -577,6 +577,8 @@ fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object)
                 return eval_begin(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "list")) {
                 return eval_list_data(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "let")) {
+                return eval_let(allocator, list, env);
             } else {
                 return error.UnknownKeyword;
             }
@@ -587,7 +589,7 @@ fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object)
     }
 }
 
-fn eval_define(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) anyerror!Object.Object {
+fn eval_define(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
     if (list.items.len != 3) {
         return error.InvalidNumberArgsForDefine;
     }
@@ -604,10 +606,11 @@ fn eval_define(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object),
     const val = try eval_obj(allocator, &list.items[2], env);
 
     try env.set(sym.value, val);
+
     return .{ .Void = {} };
 }
 
-fn eval_function_definition(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) anyerror!Object.Object {
+fn eval_function_definition(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
     const params = blk: {
         switch (list.items[1]) {
             .List => |x| {
@@ -652,6 +655,7 @@ fn eval_begin(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), 
     for (list.items[1..]) |*obj| {
         result = try eval_obj(allocator, obj, new_env);
     }
+
     return result;
 }
 
@@ -661,6 +665,51 @@ fn eval_list_data(allocator: std.mem.Allocator, list: std.ArrayList(Object.Objec
         try new_list.append(try eval_obj(allocator, obj, env));
     }
     return .{ .ListData = .{ .list = new_list } };
+}
+
+fn eval_let(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+    var result: Object.Object = .{ .Void = {} };
+    var bindings_env = try Env.init(allocator);
+
+    if (list.items.len < 3) {
+        return error.InvalidNumberArgsForLet;
+    }
+
+    const bindings = blk: {
+        switch (list.items[1]) {
+            .List => |x| break :blk x,
+            else => return error.InvalidBindingsForLet,
+        }
+    };
+
+    for (bindings.list.items) |binding| {
+        const b = blk: {
+            switch (binding) {
+                .List => |x| break :blk x,
+                else => return error.InvalidBindingsForLet,
+            }
+        };
+        if (b.list.items.len != 2) {
+            return error.InvalidBindingsForLet;
+        }
+        const key = blk: {
+            switch (b.list.items[0]) {
+                .Symbol => |x| break :blk x,
+                else => return error.InvalidBindingsForLet,
+            }
+        };
+        const value = try eval_obj(allocator, &b.list.items[1], env);
+        try bindings_env.set(key.value, value);
+    }
+
+    var new_env = try env.extend(env);
+    try new_env.update(&bindings_env);
+
+    for (list.items[2..]) |*obj| {
+        result = try eval_obj(allocator, obj, new_env);
+    }
+
+    return result;
 }
 
 test "test_simple_add" {
@@ -1247,5 +1296,56 @@ test "test_list_data" {
         const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqualDeep(expected, actual);
+    }
+}
+
+test "test_let" {
+    const Test = struct {
+        []const u8,
+        i64,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (let ((a 1) (b 2))
+            \\         (+ a b)
+            \\     )
+            \\ )
+            ,
+            3,
+        },
+        .{
+            \\ (begin
+            \\     (define a 100)
+            \\     (let ((a 1) (b 2))
+            \\         (+ a b)
+            \\     )
+            \\     a
+            \\ )
+            ,
+            100,
+        },
+        .{
+            \\ (begin
+            \\     (let ((x 2) (y 3))
+            \\         (let ((x 7) (z (+ x y)))
+            \\             (* z x)
+            \\     )
+            \\ )
+            ,
+            35,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqualDeep(expected, actual.Integer.value);
     }
 }

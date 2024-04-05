@@ -40,3 +40,10 @@ pub fn extend(self: Env, parent: *Env) !*Env {
 
     return env;
 }
+
+pub fn update(self: *Env, data: *Env) !void {
+    var iterator = data.vars.iterator();
+    while (iterator.next()) |entry| {
+        try self.set(entry.key_ptr.*, entry.value_ptr.*);
+    }
+}
