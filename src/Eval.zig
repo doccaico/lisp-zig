@@ -579,6 +579,8 @@ fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object)
                 return eval_list_data(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "let")) {
                 return eval_let(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "map")) {
+                return eval_map(allocator, list, env);
             } else {
                 return error.UnknownKeyword;
             }
@@ -710,6 +712,45 @@ fn eval_let(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), en
     }
 
     return result;
+}
+
+fn eval_map(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+    if (list.items.len != 3) {
+        return error.InvalidNumberArgsForMap;
+    }
+    const lambda = try eval_obj(allocator, &list.items[1], env);
+    const arg_list = try eval_obj(allocator, &list.items[2], env);
+
+    if (lambda.Lambda.params.items.len != 1) {
+        return error.InvalidNumberParamsForMapLambdaFunc;
+    }
+    switch (lambda) {
+        .Lambda => {},
+        else => return error.NotALambdaWhileEvalMap,
+    }
+
+    const args = blk: {
+        switch (arg_list) {
+            .ListData => |x| break :blk x,
+            else => return error.NotALambdaWhileEvalMap,
+        }
+    };
+    const params = lambda.Lambda.params;
+    const body = lambda.Lambda.body;
+    const func_env = lambda.Lambda.env;
+
+    const func_param = params.items[0];
+    var result_list = std.ArrayList(Object.Object).init(allocator);
+    for (args.list.items) |*arg| {
+        const val = try eval_obj(allocator, arg, env);
+        var new_env = try env.extend(func_env);
+        try new_env.set(func_param, val);
+        const new_body = body;
+        var new_obj = .{ .List = .{ .list = new_body } };
+        const result = try eval_obj(allocator, &new_obj, new_env);
+        try result_list.append(result);
+    }
+    return .{ .ListData = .{ .list = result_list } };
 }
 
 test "test_simple_add" {
@@ -1347,5 +1388,43 @@ test "test_let" {
         const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual.Integer.value);
+    }
+}
+
+test "test_map" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var list = std.ArrayList(Object.Object).init(allocator);
+    try list.append(.{ .Integer = .{ .value = 1 } });
+    try list.append(.{ .Integer = .{ .value = 4 } });
+    try list.append(.{ .Integer = .{ .value = 9 } });
+    try list.append(.{ .Integer = .{ .value = 16 } });
+    try list.append(.{ .Integer = .{ .value = 25 } });
+
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (define sqr (lambda (r) (* r r)))
+            \\     (define l (list 1 2 3 4 5))
+            \\     (map sqr l)
+            \\ )
+            ,
+            .{ .ListData = .{ .list = list } },
+        },
+    };
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqualDeep(expected, actual);
     }
 }
