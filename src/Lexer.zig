@@ -1,22 +1,5 @@
 const std = @import("std");
 
-// pub const TokenTag = enum(u8) {
-//     Integer,
-//     Float,
-//     String,
-//     BinaryOp,
-//     Keyword,
-//     Symbol,
-//     If,
-//     LParen,
-//     RParen,
-// };
-
-// Error
-// const TokenError = error{
-//     UnterminatedString,
-// };
-
 pub const Token = union(enum(u8)) {
     Integer: Integer,
     Float: Float,

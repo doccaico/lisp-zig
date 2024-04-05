@@ -121,6 +121,9 @@ fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) !Ob
             .Bool => |x| {
                 return .{ .Bool = .{ .value = x.value } };
             },
+            .ListData => |x| {
+                return .{ .ListData = .{ .list = x.list } };
+            },
             else => {
                 return error.InvalidObject;
             },
@@ -570,6 +573,10 @@ fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object)
                 return eval_define(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "lambda")) {
                 return eval_function_definition(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "begin")) {
+                return eval_begin(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "list")) {
+                return eval_list_data(allocator, list, env);
             } else {
                 return error.UnknownKeyword;
             }
@@ -637,6 +644,23 @@ fn eval_symbol(sym: []const u8, env: *Env) !Object.Object {
     }
 
     return env.get(sym) orelse error.UnboundSymbol;
+}
+
+fn eval_begin(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+    var result: Object.Object = .{ .Void = {} };
+    const new_env = try env.extend(env);
+    for (list.items[1..]) |*obj| {
+        result = try eval_obj(allocator, obj, new_env);
+    }
+    return result;
+}
+
+fn eval_list_data(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+    var new_list = std.ArrayList(Object.Object).init(allocator);
+    for (list.items[1..]) |*obj| {
+        try new_list.append(try eval_obj(allocator, obj, env));
+    }
+    return .{ .ListData = .{ .list = new_list } };
 }
 
 test "test_simple_add" {
@@ -1153,5 +1177,75 @@ test "test_lambda" {
         const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual.List.list.items[0]);
+    }
+}
+
+test "test_begin" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (define r 10)
+            \\     (define pi 314)
+            \\     (* pi (* r r))
+            \\ );
+            ,
+            .{ .Integer = .{ .value = 314 * 10 * 10 } },
+        },
+        .{
+            \\ (begin
+            \\     (define r 5.0)
+            \\     (define pi 3.14)
+            \\     (* pi (* r r))
+            \\ );
+            ,
+            .{ .Float = .{ .value = 3.14 * 5.0 * 5.0 } },
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual);
+    }
+}
+
+test "test_list_data" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var list = std.ArrayList(Object.Object).init(allocator);
+    try list.append(.{ .Integer = .{ .value = 1 } });
+    try list.append(.{ .Integer = .{ .value = 2 } });
+    try list.append(.{ .Integer = .{ .value = 3 } });
+
+    const tests = [_]Test{
+        .{
+            "(list 1 2 3)",
+            .{ .ListData = .{ .list = list } },
+        },
+    };
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqualDeep(expected, actual);
     }
 }

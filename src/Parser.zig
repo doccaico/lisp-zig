@@ -27,7 +27,7 @@ fn parse_list(allocator: std.mem.Allocator, tokens: *std.ArrayList(Lexer.Token))
         const token = tokens.pop();
         switch (token) {
             .Keyword => |x| try list.append(.{ .Keyword = .{ .value = x.value } }),
-            .If => try list.append(.{ .If = .{} }),
+            .If => try list.append(.{ .If = {} }),
             .BinaryOp => |x| try list.append(.{ .BinaryOp = .{ .value = x.value } }),
             .Integer => |x| try list.append(.{ .Integer = .{ .value = x.value } }),
             .Float => |x| try list.append(.{ .Float = .{ .value = x.value } }),
