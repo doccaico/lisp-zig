@@ -21,6 +21,36 @@ define name value
 > 3.14
 ```
 
+- begin
+```
+begin element ...
+
+(begin
+    (define a 1)
+    (define b 2)
+    (+ a b)
+)
+
+> 3
+```
+
+- list
+```
+list element ...
+
+(list 1 2 3 4 5)
+
+> (1 2 3 4 5) 
+```
+
+- lambda
+```
+(define add (lambda (a b) (+ a b)))
+(add 1 2)
+
+> 3
+```
+
 - map
 ```
 map function list
