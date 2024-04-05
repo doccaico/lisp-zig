@@ -584,7 +584,7 @@ fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object)
             } else if (std.mem.eql(u8, x.value, "map")) {
                 return eval_map(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "print")) {
-                return eval_print_list(allocator, list, env);
+                return eval_print(allocator, list, env);
             } else {
                 return error.UnknownKeyword;
             }
@@ -758,7 +758,7 @@ fn eval_map(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), en
     return .{ .ListData = .{ .list = result_list } };
 }
 
-fn eval_print_list(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+fn eval_print(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
     const stdout = std.io.getStdOut().writer();
 
     if (list.items.len != 2) {
