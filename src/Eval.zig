@@ -1346,6 +1346,6 @@ test "test_let" {
     for (tests) |t| {
         const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
-        try std.testing.expectEqualDeep(expected, actual.Integer.value);
+        try std.testing.expectEqual(expected, actual.Integer.value);
     }
 }
