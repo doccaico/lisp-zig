@@ -1,5 +1,20 @@
 # Lisp-Zig (Tested on Windows only)
 
+Something like Lisp. I referred to [Lisp interpreter in Rust](https://vishpat.github.io/lisp-rs/) and [https://github.com/vishpat/lisp-rs](vishpat/lisp-rs). Thank you Vishal Patil.
+
+## Zig version
+
+```
+// 2024/04/06
+0.12.0-dev.3533+e5d900268
+```
+
+## Usage
+
+```
+$ zig run src\main.zig
+```
+
 ## Keywords
 
 - print
