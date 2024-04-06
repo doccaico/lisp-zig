@@ -96,9 +96,9 @@ fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) any
                             }
                         }
                         switch (new_list.items[0]) {
-                            .Lambda => |y| {
-                                _ = y;
-                                return error.Todo;
+                            .Lambda => {
+                                var new_obj = .{ .List = .{ .list = new_list } };
+                                return try eval_obj(allocator, &new_obj, current_env);
                             },
                             else => return .{ .List = .{ .list = new_list } },
                         }
@@ -131,15 +131,6 @@ fn eval_obj(allocator: std.mem.Allocator, object: *Object.Object, env: *Env) any
             },
         }
     }
-
-    // const integer_obj = try allocator.create(Object.Integer);
-    // integer_obj.value = 3;
-    // const integer_obj: Object.Integer = .{ .value = 3 };
-    // const new_obj = try allocator.create(Object.Object);
-    // new_obj.* = .{ .Integer = integer_obj };
-    // return new_obj;
-
-    return .{ .Integer = .{ .value = -256 } };
 }
 
 fn eval_binary_op(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
@@ -1923,6 +1914,269 @@ test "test_define_function" {
             \\ )
             ,
             3,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Integer.value);
+    }
+}
+
+test "test_functions" {
+    const Test = struct {
+        []const u8,
+        i64,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (define fib (lambda (n) 
+            \\         (if (< n 2) 1 
+            \\             (+ (fib (- n 1)) 
+            \\                 (fib (- n 2))))))
+            \\     (fib 10)
+            \\ )
+            ,
+            89,
+        },
+        .{
+            \\ (begin
+            \\     (define fact (lambda (n) (if (< n 1) 1 (* n (fact (- n 1))))))
+            \\     (fact 5)
+            \\ )
+            ,
+            120,
+        },
+        .{
+            \\ (begin
+            \\     (define (abs n) (if (< n 0) (* -1 n) n))
+            \\     (abs -5)
+            \\ )
+            ,
+            5,
+        },
+        .{
+            \\ (begin
+            \\     (define sum-n 
+            \\        (lambda (n a) 
+            \\           (if (= n 0) a 
+            \\               (sum-n (- n 1) (+ n a)))))
+            \\     (sum-n 500 0)
+            \\ )
+            ,
+            125250,
+        },
+        .{
+            \\ (begin
+            \\     (define fact 
+            \\         (lambda (n a) 
+            \\           (if (= n 1) a 
+            \\             (fact (- n 1) (* n a)))))
+            \\             
+            \\     (fact 10 1)
+            \\ )
+            ,
+            3628800,
+        },
+        .{
+            \\ (begin
+            \\     (define add-n 
+            \\        (lambda (n) 
+            \\           (lambda (a) (+ n a))))
+            \\     (define add-5 (add-n 5))
+            \\     (add-5 10)
+            \\ )
+            ,
+            15,
+        },
+        .{
+            \\ (begin
+            \\     (define fib
+            \\       (lambda (n a b) 
+            \\          (if (= n 0) a 
+            \\            (if (= n 1) b 
+            \\               (fib (- n 1) b (+ a b))))))
+            \\       
+            \\     (fib 10 0 1)
+            \\ )
+            ,
+            55,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Integer.value);
+    }
+}
+
+test "test_inline_lambda" {
+    const Test = struct {
+        []const u8,
+        i64,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     ((lambda (x y) (+ x y)) 10 20)
+            \\ )
+            ,
+            30,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Integer.value);
+    }
+}
+
+test "test_sum_list_of_integers" {
+    const Test = struct {
+        []const u8,
+        i64,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (define sum-list 
+            \\         (lambda (l) 
+            \\             (if (null? l) 0 
+            \\                 (+ (car l) (sum-list (cdr l))))))
+            \\     (sum-list (list 1 2 3 4 5))
+            \\ )
+            ,
+            15,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Integer.value);
+    }
+}
+
+test "test_function_application" {
+    const Test = struct {
+        []const u8,
+        i64,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (define (double value) 
+            \\         (* 2 value))
+            \\     (define (apply-twice fn value) 
+            \\         (fn (fn value)))
+            \\ 
+            \\     (apply-twice double 5)
+            \\ )
+            ,
+            20,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Integer.value);
+    }
+}
+
+test "test_begin_scope1" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var list = std.ArrayList(Object.Object).init(allocator);
+    try list.append(.{ .Integer = .{ .value = 20 } });
+    try list.append(.{ .Integer = .{ .value = 30 } });
+    try list.append(.{ .Integer = .{ .value = 40 } });
+
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (define a 10)
+            \\     (define b 20)
+            \\     (define c 30)
+            \\     (begin
+            \\         (define a 20)
+            \\         (define b 30)
+            \\         (define c 40)
+            \\         (list a b c)
+            \\     )
+            \\ )
+            ,
+            .{ .ListData = .{ .list = list } },
+        },
+    };
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqualDeep(expected, actual);
+    }
+}
+
+test "test_begin_scope2" {
+    const Test = struct {
+        []const u8,
+        i64,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin 
+            \\     (define x 10)
+            \\     (begin
+            \\         (define x 20)
+            \\         x 
+            \\     )
+            \\     x
+            \\ )
+            ,
+            10,
         },
     };
 
