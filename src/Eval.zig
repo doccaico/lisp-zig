@@ -617,14 +617,27 @@ fn eval_define(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object),
     const sym = switch (list.items[1]) {
         .Symbol => |x| x,
         .List => |x| {
-            // TODO
-            _ = x;
-            return error.Todo;
+            const name = blk: {
+                switch (x.list.items[0]) {
+                    .Symbol => |y| break :blk y,
+                    else => return error.InvalidSymbolForDefine,
+                }
+            };
+            // var params: Object.Object = .{ .List = .{ .list = undefined } };
+            var params: Object.Object = .{ .List = .{ .list = std.ArrayList(Object.Object).init(allocator) } };
+            try params.List.list.appendSlice(x.list.items[1..]);
+            const body = list.items[2];
+            var new_obj = std.ArrayList(Object.Object).init(allocator);
+            try new_obj.append(.{ .Void = {} });
+            try new_obj.append(params);
+            try new_obj.append(body);
+            const lambda = try eval_function_definition(allocator, new_obj, env);
+            try env.set(name.value, lambda);
+            return .{ .Void = {} };
         },
         else => return error.InvalidDefine,
     };
     const val = try eval_obj(allocator, &list.items[2], env);
-
     try env.set(sym.value, val);
 
     return .{ .Void = {} };
@@ -1894,5 +1907,34 @@ test "test_is_null" {
         const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqual(expected, actual.Bool.value);
+    }
+}
+
+test "test_define_function" {
+    const Test = struct {
+        []const u8,
+        i64,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (define (add a b) (+ a b))
+            \\     (add 1 2)
+            \\ )
+            ,
+            3,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Integer.value);
     }
 }
