@@ -585,6 +585,10 @@ fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object)
                 return eval_map(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "print")) {
                 return eval_print(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "filter")) {
+                return eval_filter(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "reduce")) {
+                return eval_reduce(allocator, list, env);
             } else {
                 return error.UnknownKeyword;
             }
@@ -725,23 +729,24 @@ fn eval_map(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), en
     const lambda = try eval_obj(allocator, &list.items[1], env);
     const arg_list = try eval_obj(allocator, &list.items[2], env);
 
-    if (lambda.Lambda.params.items.len != 1) {
-        return error.InvalidNumberParamsForMapLambdaFunc;
-    }
     switch (lambda) {
-        .Lambda => {},
+        .Lambda => {
+            if (lambda.Lambda.params.items.len != 1) {
+                return error.InvalidNumberParamsForMapLambdaFunc;
+            }
+        },
         else => return error.NotALambdaWhileEvalMap,
     }
+    const params = lambda.Lambda.params;
+    const body = lambda.Lambda.body;
+    const func_env = lambda.Lambda.env;
 
     const args = blk: {
         switch (arg_list) {
             .ListData => |x| break :blk x,
-            else => return error.NotALambdaWhileEvalMap,
+            else => return error.InvalidMapArgs,
         }
     };
-    const params = lambda.Lambda.params;
-    const body = lambda.Lambda.body;
-    const func_env = lambda.Lambda.env;
 
     const func_param = params.items[0];
     var result_list = std.ArrayList(Object.Object).init(allocator);
@@ -768,6 +773,102 @@ fn eval_print(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), 
     try obj.inspect(stdout);
 
     return .{ .Void = {} };
+}
+
+fn eval_filter(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+    if (list.items.len != 3) {
+        return error.InvalidNumberArgsForFilter;
+    }
+    const lambda = try eval_obj(allocator, &list.items[1], env);
+    const arg_list = try eval_obj(allocator, &list.items[2], env);
+
+    switch (lambda) {
+        .Lambda => {
+            if (lambda.Lambda.params.items.len != 1) {
+                return error.InvalidNumberParamsForFilterLambdaFunc;
+            }
+        },
+        else => return error.NotALambdaWhileEvalFilter,
+    }
+    const params = lambda.Lambda.params;
+    const body = lambda.Lambda.body;
+    const func_env = lambda.Lambda.env;
+
+    const args = blk: {
+        switch (arg_list) {
+            .ListData => |x| break :blk x,
+            else => return error.InvalidFilterArgs,
+        }
+    };
+
+    const func_param = params.items[0];
+    var result_list = std.ArrayList(Object.Object).init(allocator);
+    for (args.list.items) |*arg| {
+        const val = try eval_obj(allocator, arg, env);
+        var new_env = try env.extend(func_env);
+        try new_env.set(func_param, val);
+        const new_body = body;
+        var new_obj = .{ .List = .{ .list = new_body } };
+        const result_obj = try eval_obj(allocator, &new_obj, new_env);
+        const result = blk: {
+            switch (result_obj) {
+                .Bool => |x| break :blk x,
+                else => return error.InvalidFilterResult,
+            }
+        };
+        if (result.value) {
+            try result_list.append(val);
+        }
+    }
+
+    return .{ .ListData = .{ .list = result_list } };
+}
+
+fn eval_reduce(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+    if (list.items.len != 3) {
+        return error.InvalidNumberArgsForReduce;
+    }
+    const lambda = try eval_obj(allocator, &list.items[1], env);
+    const arg_list = try eval_obj(allocator, &list.items[2], env);
+
+    switch (lambda) {
+        .Lambda => |x| {
+            if (x.params.items.len != 2) {
+                return error.InvalidNumberParamsForReduceLambdaFunc;
+            }
+        },
+        else => return error.NotALambdaWhileEvalReduce,
+    }
+    const params = lambda.Lambda.params;
+    const body = lambda.Lambda.body;
+    const func_env = lambda.Lambda.env;
+
+    const args = blk: {
+        switch (arg_list) {
+            .ListData => |x| break :blk x,
+            else => return error.InvalidReduceArgs,
+        }
+    };
+
+    if (args.list.items.len < 2) {
+        return error.InvalidNumberArgsForReduce;
+    }
+
+    const reduce_param1 = params.items[0];
+    const reduce_param2 = params.items[1];
+    var accumulator = try eval_obj(allocator, &args.list.items[0], env);
+    for (args.list.items[1..]) |*arg| {
+        var new_env = try env.extend(func_env);
+        try new_env.set(reduce_param1, accumulator);
+
+        const val = try eval_obj(allocator, arg, env);
+        try new_env.set(reduce_param2, val);
+
+        const new_body = body;
+        var new_obj = .{ .List = .{ .list = new_body } };
+        accumulator = try eval_obj(allocator, &new_obj, new_env);
+    }
+    return accumulator;
 }
 
 test "test_simple_add" {
@@ -1436,6 +1537,81 @@ test "test_map" {
             .{ .ListData = .{ .list = list } },
         },
     };
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqualDeep(expected, actual);
+    }
+}
+
+test "test_filter" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var list = std.ArrayList(Object.Object).init(allocator);
+    try list.append(.{ .Integer = .{ .value = 1 } });
+    try list.append(.{ .Integer = .{ .value = 3 } });
+    try list.append(.{ .Integer = .{ .value = 5 } });
+
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (define odd (lambda (v) (= 1 (% v 2))))
+            \\     (define l (list 1 2 3 4 5))
+            \\     (filter odd l)
+            \\ )
+            ,
+            .{ .ListData = .{ .list = list } },
+        },
+    };
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqualDeep(expected, actual);
+    }
+}
+
+test "test_reduce" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (define add (lambda (a b) (+ a b)))
+            \\     (define l (list 1 2 4 8 16 32))
+            \\     (reduce add l )
+            \\ )
+            ,
+            .{ .Integer = .{ .value = 63 } },
+        },
+        .{
+            \\ (begin
+            \\     (define odd (lambda (v) (= 1 (% v 2))))
+            \\     (define l (list 1 2 3 4 5))
+            \\     (reduce (lambda (x y) (or x y)) (map odd l))
+            \\ )
+            ,
+            .{ .Bool = .{ .value = true } },
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
     var env = try Env.init(allocator);
 

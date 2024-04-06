@@ -53,15 +53,6 @@ lambda args body
 > 3
 ```
 
-- map
-```
-map function list
-
-(map (lambda (a) (+ a 10)) (list 1 2 3 4 5))
-
-> (11 12 13 14 15)
-```
-
 - let
 ```
 let binds body
@@ -73,4 +64,39 @@ let binds body
 )
 
 > 3
+```
+
+- map
+```
+map function list
+
+(map (lambda (a) (+ a 10)) (list 1 2 3 4 5))
+
+> (11 12 13 14 15)
+```
+
+- filter
+```
+filter function list
+
+(begin
+    (define odd (lambda (v) (= 1 (% v 2))))
+    (define l (list 1 2 3 4 5))
+    (filter odd l)
+)
+
+> (1 3 5)
+```
+
+- reduce
+```
+reduce function list
+
+(begin
+    (define add (lambda (a b) (+ a b)))
+    (define l (list 1 2 4 8 16 32))
+    (reduce add l )
+)
+
+> 63
 ```
