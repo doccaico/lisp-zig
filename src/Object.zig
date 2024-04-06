@@ -24,10 +24,6 @@ pub const Object = union(enum(u8)) {
     }
 };
 
-// pub const Void = struct {};
-
-// pub const If = struct {};
-
 pub const Keyword = struct {
     value: []const u8,
 
@@ -62,6 +58,7 @@ pub const Float = struct {
 
 pub const Bool = struct {
     value: bool,
+
     pub fn inspect(self: Bool, writer: anytype) !void {
         try writer.print("{}", .{self.value});
     }

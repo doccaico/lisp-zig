@@ -7,81 +7,33 @@ pub const Token = union(enum(u8)) {
     BinaryOp: BinaryOp,
     Keyword: Keyword,
     Symbol: Symbol,
-    If: If,
-    LParen: LParen,
-    RParen: RParen,
-
-    // pub fn string(self: Token, writer: anytype) !void {
-    //     return switch (self) {
-    //         inline else => |x| x.string(writer),
-    //     };
-    // }
+    If: void,
+    LParen: void,
+    RParen: void,
 };
 
 pub const Integer = struct {
     value: i64,
-
-    // pub fn string(self: Integer, writer: anytype) !void {
-    //     try writer.print("{d}", .{self.value});
-    // }
 };
 
 pub const Float = struct {
     value: f64,
-
-    // pub fn string(self: Float, writer: anytype) !void {
-    //     try writer.print("{d}", .{self.value});
-    // }
 };
 
 pub const String = struct {
     value: []const u8,
-
-    // pub fn string(self: String, writer: anytype) !void {
-    //     try writer.writeAll(self.value);
-    // }
 };
 
 pub const BinaryOp = struct {
     value: []const u8,
-
-    // pub fn string(self: BinaryOp, writer: anytype) !void {
-    //     try writer.writeAll(self.value);
-    // }
 };
 
 pub const Keyword = struct {
     value: []const u8,
-
-    // pub fn string(self: Keyword, writer: anytype) !void {
-    //     try writer.writeAll(self.value);
-    // }
 };
 
 pub const Symbol = struct {
     value: []const u8,
-
-    // pub fn string(self: Symbol, writer: anytype) !void {
-    //     try writer.writeAll(self.value);
-    // }
-};
-
-pub const If = struct {
-    // pub fn string(_: If, writer: anytype) !void {
-    //     try writer.writeAll("if");
-    // }
-};
-
-pub const LParen = struct {
-    // pub fn string(_: LParen, writer: anytype) !void {
-    //     try writer.writeAll("(");
-    // }
-};
-
-pub const RParen = struct {
-    // pub fn string(_: RParen, writer: anytype) !void {
-    //     try writer.writeAll(")");
-    // }
 };
 
 pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(Token) {
@@ -98,9 +50,9 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(
         var ch = chars.orderedRemove(0);
         switch (ch) {
             '(' => {
-                try tokens.append(.{ .LParen = .{} });
+                try tokens.append(.{ .LParen = {} });
             },
-            ')' => try tokens.append(.{ .RParen = .{} }),
+            ')' => try tokens.append(.{ .RParen = {} }),
             '"' => {
                 var word = std.ArrayList(u8).init(allocator);
                 while (chars.items.len > 0 and chars.items[0] != '"') {
@@ -132,7 +84,7 @@ pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(
                         const float_result = isFloat(word.items);
                         if (float_result.ok) break :blk .{ .Float = .{ .value = float_result.value } };
                         if (isKeyword(word.items)) break :blk .{ .Keyword = .{ .value = word.items } };
-                        if (isIf(word.items)) break :blk .{ .If = .{} };
+                        if (isIf(word.items)) break :blk .{ .If = {} };
                         if (isBinaryOp(word.items)) break :blk .{ .BinaryOp = .{ .value = word.items } };
                         break :blk .{ .Symbol = .{ .value = word.items } };
                     };
@@ -215,11 +167,11 @@ test "test_add" {
     const actual = try tokenize(allocator, "(+ 1 2)");
 
     const expected = [_]Token{
-        .{ .LParen = .{} },
+        .{ .LParen = {} },
         .{ .BinaryOp = .{ .value = "+" } },
         .{ .Integer = .{ .value = 1 } },
         .{ .Integer = .{ .value = 2 } },
-        .{ .RParen = .{} },
+        .{ .RParen = {} },
     };
 
     try std.testing.expectEqualDeep(expected[0..], actual.items);
@@ -241,27 +193,27 @@ test "test_area_of_a_circle" {
     const actual = try tokenize(allocator, program);
 
     const expected = [_]Token{
-        .{ .LParen = .{} },
-        .{ .LParen = .{} },
+        .{ .LParen = {} },
+        .{ .LParen = {} },
         .{ .Keyword = .{ .value = "define" } },
         .{ .Symbol = .{ .value = "r" } },
         .{ .Integer = .{ .value = 10 } },
-        .{ .RParen = .{} },
-        .{ .LParen = .{} },
+        .{ .RParen = {} },
+        .{ .LParen = {} },
         .{ .Keyword = .{ .value = "define" } },
         .{ .Symbol = .{ .value = "pi" } },
         .{ .Integer = .{ .value = 314 } },
-        .{ .RParen = .{} },
-        .{ .LParen = .{} },
+        .{ .RParen = {} },
+        .{ .LParen = {} },
         .{ .BinaryOp = .{ .value = "*" } },
         .{ .Symbol = .{ .value = "pi" } },
-        .{ .LParen = .{} },
+        .{ .LParen = {} },
         .{ .BinaryOp = .{ .value = "*" } },
         .{ .Symbol = .{ .value = "r" } },
         .{ .Symbol = .{ .value = "r" } },
-        .{ .RParen = .{} },
-        .{ .RParen = .{} },
-        .{ .RParen = .{} },
+        .{ .RParen = {} },
+        .{ .RParen = {} },
+        .{ .RParen = {} },
     };
 
     try std.testing.expectEqualDeep(expected[0..], actual.items);

@@ -34,7 +34,7 @@ fn parse_list(allocator: std.mem.Allocator, tokens: *std.ArrayList(Lexer.Token))
             .String => |x| try list.append(.{ .String = .{ .value = x.value } }),
             .Symbol => |x| try list.append(.{ .Symbol = .{ .value = x.value } }),
             .LParen => {
-                try tokens.append(.{ .LParen = .{} });
+                try tokens.append(.{ .LParen = {} });
                 const sub_list = try parse_list(allocator, tokens);
                 try list.append(sub_list);
             },
