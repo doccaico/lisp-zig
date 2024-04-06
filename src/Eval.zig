@@ -581,14 +581,16 @@ fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object)
                 return eval_list_data(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "let")) {
                 return eval_let(allocator, list, env);
-            } else if (std.mem.eql(u8, x.value, "map")) {
-                return eval_map(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "print")) {
                 return eval_print(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "map")) {
+                return eval_map(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "filter")) {
                 return eval_filter(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "reduce")) {
                 return eval_reduce(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "range")) {
+                return eval_range(allocator, list, env);
             } else {
                 return error.UnknownKeyword;
             }
@@ -869,6 +871,47 @@ fn eval_reduce(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object),
         accumulator = try eval_obj(allocator, &new_obj, new_env);
     }
     return accumulator;
+}
+
+// punk
+fn eval_range(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+    if (list.items.len != 3 and list.items.len != 4) {
+        return error.InvalidNumberArgsForRange;
+    }
+
+    const start_obj = try eval_obj(allocator, &list.items[1], env);
+    const end_obj = try eval_obj(allocator, &list.items[2], env);
+    var stride: i64 = 1;
+    if (list.items.len == 4) {
+        const stride_obj = try eval_obj(allocator, &list.items[3], env);
+        stride = blk: {
+            switch (stride_obj) {
+                .Integer => |x| break :blk x.value,
+                else => return error.InvalidStrideForRange,
+            }
+        };
+    }
+
+    const start = blk: {
+        switch (start_obj) {
+            .Integer => |x| break :blk x.value,
+            else => return error.InvalidStartFroRange,
+        }
+    };
+    const end = blk: {
+        switch (end_obj) {
+            .Integer => |x| break :blk x.value,
+            else => return error.InvalidEndFroRange,
+        }
+    };
+
+    var new_list = std.ArrayList(Object.Object).init(allocator);
+    var i = start;
+    while (i < end) : (i += stride) {
+        try new_list.append(.{ .Integer = .{ .value = i } });
+    }
+
+    return .{ .ListData = .{ .list = new_list } };
 }
 
 test "test_simple_add" {
@@ -1612,6 +1655,72 @@ test "test_reduce" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual);
+    }
+}
+
+test "test_range_no_stride" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var list = std.ArrayList(Object.Object).init(allocator);
+    try list.append(.{ .Integer = .{ .value = 0 } });
+    try list.append(.{ .Integer = .{ .value = 1 } });
+    try list.append(.{ .Integer = .{ .value = 2 } });
+    try list.append(.{ .Integer = .{ .value = 3 } });
+    try list.append(.{ .Integer = .{ .value = 4 } });
+    try list.append(.{ .Integer = .{ .value = 5 } });
+
+    const tests = [_]Test{
+        .{
+            "(range 0 6)",
+            .{ .ListData = .{ .list = list } },
+        },
+    };
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqualDeep(expected, actual);
+    }
+}
+
+test "test_range_with_stride" {
+    const Test = struct {
+        []const u8,
+        Object.Object,
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var list = std.ArrayList(Object.Object).init(allocator);
+    try list.append(.{ .Integer = .{ .value = 0 } });
+    try list.append(.{ .Integer = .{ .value = 3 } });
+    try list.append(.{ .Integer = .{ .value = 6 } });
+    try list.append(.{ .Integer = .{ .value = 9 } });
+
+    const tests = [_]Test{
+        .{
+            "(range 0 10 3)",
+            .{ .ListData = .{ .list = list } },
+        },
+    };
 
     var env = try Env.init(allocator);
 
