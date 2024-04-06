@@ -113,3 +113,43 @@ range (start end stride)
 
 >(0 2 4 6 8 10)
 ```
+
+- car
+```
+car list
+
+(car (list 1 2 3))
+
+>1
+```
+
+- cdr
+```
+cdr list
+
+(car (list 1 2 3))
+
+>(2 3)
+```
+
+- length
+```
+length list
+
+(length (list 1 2 3))
+
+>3
+```
+
+- null?
+```
+null? list
+
+(null? (list 1 2 3 4 5))
+
+>false
+
+(null? (list))
+
+>true
+```

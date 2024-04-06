@@ -595,6 +595,10 @@ fn eval_keyword(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object)
                 return eval_car(allocator, list, env);
             } else if (std.mem.eql(u8, x.value, "cdr")) {
                 return eval_cdr(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "length")) {
+                return eval_length(allocator, list, env);
+            } else if (std.mem.eql(u8, x.value, "null?")) {
+                return eval_is_null(allocator, list, env);
             } else {
                 return error.UnknownKeyword;
             }
@@ -922,31 +926,41 @@ fn eval_car(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), en
     const l = try eval_obj(allocator, &list.items[1], env);
     return switch (l) {
         .ListData => |x| x.list.items[0],
-        else => error.ArgsIsNotList,
+        else => error.ArgIsNotList,
     };
 }
 
 fn eval_cdr(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
     const l = try eval_obj(allocator, &list.items[1], env);
     var new_list = std.ArrayList(Object.Object).init(allocator);
-    return blk: {
-        switch (l) {
-            .ListData => |x| {
-                for (x.list.items[1..]) |obj| {
-                    try new_list.append(obj);
-                }
-                break :blk .{ .ListData = .{ .list = new_list } };
-            },
-            else => break :blk error.ArgsIsNotList,
-        }
-    };
+    switch (l) {
+        .ListData => |x| {
+            for (x.list.items[1..]) |obj| {
+                try new_list.append(obj);
+            }
+            return .{ .ListData = .{ .list = new_list } };
+        },
+        else => return error.ArgIsNotList,
+    }
 }
 
-// fn eval_length(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
-// }
-//
-// fn eval_is_null(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
-// }
+fn eval_length(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+    const obj = try eval_obj(allocator, &list.items[1], env);
+    switch (obj) {
+        .List => |x| return .{ .Integer = .{ .value = @intCast(x.list.items.len) } },
+        .ListData => |x| return .{ .Integer = .{ .value = @intCast(x.list.items.len) } },
+        else => return error.ArgIsNotList,
+    }
+}
+
+fn eval_is_null(allocator: std.mem.Allocator, list: std.ArrayList(Object.Object), env: *Env) !Object.Object {
+    const obj = try eval_obj(allocator, &list.items[1], env);
+    switch (obj) {
+        .List => |x| return .{ .Bool = .{ .value = x.list.items.len == 0 } },
+        .ListData => |x| return .{ .Bool = .{ .value = x.list.items.len == 0 } },
+        else => return error.ArgIsNotList,
+    }
+}
 
 test "test_simple_add" {
     const Test = struct {
@@ -1823,5 +1837,62 @@ test "test_cdr" {
         const actual = try eval(allocator, t[0], &env);
         const expected = t[1];
         try std.testing.expectEqualDeep(expected, actual);
+    }
+}
+
+test "test_length" {
+    const Test = struct {
+        []const u8,
+        i64,
+    };
+    const tests = [_]Test{
+        .{
+            \\ (begin
+            \\     (length (list 1 2 3))
+            \\ )
+            ,
+            3,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Integer.value);
+    }
+}
+
+test "test_is_null" {
+    const Test = struct {
+        []const u8,
+        bool,
+    };
+    const tests = [_]Test{
+        .{
+            "(null? (list 1 2 3 4 5))",
+            false,
+        },
+        .{
+            "(null? (list))",
+            true,
+        },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var env = try Env.init(allocator);
+
+    for (tests) |t| {
+        const actual = try eval(allocator, t[0], &env);
+        const expected = t[1];
+        try std.testing.expectEqual(expected, actual.Bool.value);
     }
 }
