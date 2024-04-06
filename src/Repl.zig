@@ -3,8 +3,6 @@ const std = @import("std");
 
 const Env = @import("Env.zig");
 const Eval = @import("Eval.zig");
-const Lexer = @import("Lexer.zig");
-const Parser = @import("Parser.zig");
 
 const PROMPT = "lisp-zig> ";
 const DELIMITER = if (builtin.os.tag == .windows) '\r' else '\n';
@@ -12,10 +10,10 @@ const DELIMITER = if (builtin.os.tag == .windows) '\r' else '\n';
 pub fn start(allocator: std.mem.Allocator, stdin: anytype, stdout: anytype) !void {
     var env = try Env.init(allocator);
 
+    var input = std.ArrayList(u8).init(allocator);
+
     loop: while (true) {
         try stdout.writeAll(PROMPT);
-
-        var input = std.ArrayList(u8).init(allocator);
 
         stdin.streamUntilDelimiter(input.writer(), DELIMITER, null) catch |err| switch (err) {
             error.EndOfStream => {
@@ -41,25 +39,8 @@ pub fn start(allocator: std.mem.Allocator, stdin: anytype, stdout: anytype) !voi
         try val.inspect(stdout);
         try stdout.writeByte('\n');
 
-        // switch (val) {
-        //     .Void => {},
-        //     .Integer => |x| try stdout.print("{d}\n", .{x.value}),
-        //     .String => |x| try stdout.print("{s}\n", .{x.value}),
-        //     .Bool => |x| try stdout.print("{}\n", .{x.value}),
-        //     .Symbol => |x| try stdout.print("{s}\n", .{x.value}),
-        //     .ListData => |x| {
-        //         try x.string(stdout);
-        //     },
-        //     // .List => |x| {
-        //     //     try stdout.print("{s}\n", .{x.list.items[0].String.value});
-        //     // },
-        //     else => try stdout.print("{any}\n", .{val}),
-        // }
-
-        // try result.inspect(stdout);
-        // try stdout.writeByte('\n');
-
         input.clearRetainingCapacity();
     }
+
     try stdout.print("Good bye", .{});
 }

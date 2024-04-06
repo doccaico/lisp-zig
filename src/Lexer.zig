@@ -11,77 +11,77 @@ pub const Token = union(enum(u8)) {
     LParen: LParen,
     RParen: RParen,
 
-    pub fn string(self: Token, writer: anytype) !void {
-        return switch (self) {
-            inline else => |x| x.string(writer),
-        };
-    }
+    // pub fn string(self: Token, writer: anytype) !void {
+    //     return switch (self) {
+    //         inline else => |x| x.string(writer),
+    //     };
+    // }
 };
 
 pub const Integer = struct {
     value: i64,
 
-    pub fn string(self: Integer, writer: anytype) !void {
-        try writer.print("{d}", .{self.value});
-    }
+    // pub fn string(self: Integer, writer: anytype) !void {
+    //     try writer.print("{d}", .{self.value});
+    // }
 };
 
 pub const Float = struct {
     value: f64,
 
-    pub fn string(self: Float, writer: anytype) !void {
-        try writer.print("{d}", .{self.value});
-    }
+    // pub fn string(self: Float, writer: anytype) !void {
+    //     try writer.print("{d}", .{self.value});
+    // }
 };
 
 pub const String = struct {
     value: []const u8,
 
-    pub fn string(self: String, writer: anytype) !void {
-        try writer.writeAll(self.value);
-    }
+    // pub fn string(self: String, writer: anytype) !void {
+    //     try writer.writeAll(self.value);
+    // }
 };
 
 pub const BinaryOp = struct {
     value: []const u8,
 
-    pub fn string(self: BinaryOp, writer: anytype) !void {
-        try writer.writeAll(self.value);
-    }
+    // pub fn string(self: BinaryOp, writer: anytype) !void {
+    //     try writer.writeAll(self.value);
+    // }
 };
 
 pub const Keyword = struct {
     value: []const u8,
 
-    pub fn string(self: Keyword, writer: anytype) !void {
-        try writer.writeAll(self.value);
-    }
+    // pub fn string(self: Keyword, writer: anytype) !void {
+    //     try writer.writeAll(self.value);
+    // }
 };
 
 pub const Symbol = struct {
     value: []const u8,
 
-    pub fn string(self: Symbol, writer: anytype) !void {
-        try writer.writeAll(self.value);
-    }
+    // pub fn string(self: Symbol, writer: anytype) !void {
+    //     try writer.writeAll(self.value);
+    // }
 };
 
 pub const If = struct {
-    pub fn string(_: If, writer: anytype) !void {
-        try writer.writeAll("if");
-    }
+    // pub fn string(_: If, writer: anytype) !void {
+    //     try writer.writeAll("if");
+    // }
 };
 
 pub const LParen = struct {
-    pub fn string(_: LParen, writer: anytype) !void {
-        try writer.writeAll("(");
-    }
+    // pub fn string(_: LParen, writer: anytype) !void {
+    //     try writer.writeAll("(");
+    // }
 };
 
 pub const RParen = struct {
-    pub fn string(_: RParen, writer: anytype) !void {
-        try writer.writeAll(")");
-    }
+    // pub fn string(_: RParen, writer: anytype) !void {
+    //     try writer.writeAll(")");
+    // }
 };
 
 pub fn tokenize(allocator: std.mem.Allocator, input: []const u8) !std.ArrayList(Token) {
