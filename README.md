@@ -1,6 +1,6 @@
 # Lisp-Zig (Tested on Windows only)
 
-Something like Lisp. I referred to [Lisp interpreter in Rust](https://vishpat.github.io/lisp-rs/) and [https://github.com/vishpat/lisp-rs](vishpat/lisp-rs). Thank you Vishal Patil.
+Something like Lisp. I referred to [Lisp interpreter in Rust](https://vishpat.github.io/lisp-rs/) and [vishpat/lisp-rs](https://github.com/vishpat/lisp-rs). Thank you Vishal Patil.
 
 ## Zig version
 
